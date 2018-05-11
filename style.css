@@ -1,0 +1,107 @@
+<style type="text/css">
+body {
+background: #dddddd;
+font-family: sans-serif;
+font-size: 100%;
+}
+.sequence {
+font-family: monospace
+}
+.asciiart {
+font-family: monospace;
+white-space: pre-wrap;
+}
+.coding {color: blue}
+.hit {background: #397878}
+.coryne {background: #a94d4d}
+.actino {background: #a97b4d}
+.microco {background: #a9a94d}
+.strsp {background: #7ba94d}
+.propi {background: #4da94d}
+.frank {background: #4da97b}
+.catenuli {background: #4da9a9}
+.glyco {background: #4d7ba9}
+.micromo {background: #4d4da9}
+.pnoca {background: #7b4da9}
+.strepto {background: #a94da9}
+.kineo {background: #a94d7b}
+.nohit {background: #dddddd}
+.eco {background: #e1541d}
+.bsu {background: #1dcee1}
+.tta {background: #fdef03}
+.poor {background: #8d8d8d}
+.rowblock {background: #96a8c7}
+.rowclass1 {background: #a5a446}
+.rowclass2 {background: #46a59c}
+.review {background: #a9a94d}
+.HK {background: #9da0cc}
+.RR {background: #b6cc9d}
+.ttaRR {background: #82ccf2}
+.orphpoor {background: #688f3d}
+.poortta {background: #c5be42}
+.orphtta {background: #b9bf41}
+.rowhi {background: #bddeff}
+
+.smfont {font-size: small}
+.xsmfont {font-size: x-small}
+.timestamp {font-size: x-small}
+
+table, tr, th, td {
+border-collapse: collapse;
+border: solid black 1px;
+padding: 3px;
+}
+th { font-size: 1.5em; }
+
+.smalltable {
+font-size: x-small;
+}
+
+table#pu {
+border-collapse: collapse;
+border: solid black 1px;
+padding: 3px;
+font-size: 300%;
+font-weight: normal
+}
+
+.fullsize {
+border-collapse: collapse;
+border: solid black 1px;
+padding: 3px;
+font-size: medium;
+font-weight: normal;
+}
+
+table.fullsize, tr.fullsize, td.asciiart, th.asciiart, td.fullsize {
+border-collapse: collapse;
+border: solid black 1px;
+padding: 3px;
+font-size: medium;
+font-weight: normal;
+}
+.species {font-style: italic}
+.genus {font-style: italic}
+a:link, a:visited, a:active {color: blue; text-decoration: none}
+a:hover {color: magenta; text-decoration: none}
+#mopup {
+position: fixed;
+top: 3px;
+/*height: 150px;*/
+width: 800px;
+visibility: hidden;
+background: #93b2a9;
+font-size: medium;
+font-weight: normal;
+}
+.common {
+  background: #a2babf
+}
+.lowcov {
+  background: #a2babf
+}
+.lowid {
+  background: #af8989
+}
+.locus { color: red;}
+</style>
