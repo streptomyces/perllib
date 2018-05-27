@@ -1,6 +1,7 @@
 package Sco::Test;
 use 5.14.0;
-our $AUTOLOAD;
+use diagnostics;
+use Carp;
 
 my $number = 37;
 
@@ -21,19 +22,21 @@ sub new {
 
 # {{{ ### sub AUTOLOAD ###
 sub AUTOLOAD {
+  our $AUTOLOAD;
   my $self=shift(@_);
   my ($var) = $AUTOLOAD=~m/.*::(\w+)$/;
   if(exists $self->{$var}) {
     return($self->{$var});
   }
   else {
+    carp("$var not found.\n");
     return(undef);
   }
 }
 # }}}
 
-END {
-print("From END in Test.pm\n");
+sub DESTROY {
+print(STDERR "From DESTROY in Test.pm\n");
 }
 
 return(1);

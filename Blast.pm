@@ -23,6 +23,59 @@ sub new {
 
 ### more subs go below ###
 
+# {{{ hitHashesFH (blastOutputFH, format(optional)) returns(list of hash(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
+sub hitHashesFH {
+my $self = shift(@_);
+my $fh=shift(@_);
+my $format = 'blast';
+my $temp = shift(@_);
+if($temp) { $format = $temp; }
+#print(STDERR "in topHit $filename\n");
+  my $searchio = new Bio::SearchIO( -format => $format,
+				    -fh   => $fh
+                                  );
+  my @retlist;
+while( my $result = $searchio->next_result() ) {
+  unless($result) { return();}
+  my $qname=$result->query_name();
+  my $qdesc=$result->query_description();
+  my $qlen=$result->query_length();
+  while (my $hit = $result->next_hit()) {
+    unless($hit->next_hsp()) { last; }
+    my $hname=$hit->name();
+    my $num_hsps = $hit->num_hsps();
+    my $hlen=$hit->length();
+    my $frac_id = sprintf("%.3f", $hit->frac_identical());
+    my $hdesc=$hit->description();
+    my $signif=$hit->significance();
+    my $laq=$hit->length_aln('query');
+    my $qcover = sprintf("%.3f", $laq/$qlen);
+    my $lah=$hit->length_aln('hit');
+    my $hcover = sprintf("%.3f", $lah/$hlen);
+    my $qstart = $hit->start('query');
+    my $qend = $hit->end('query');
+    my $hstart = $hit->start('hit');
+    my $hend = $hit->end('hit');
+    my $bitScore = $hit->bits();
+    my $strand = $hit->strand('hit');
+    my $cA = chr(01);
+    $hdesc=~s/$cA/ /g;
+    my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
+                   signif => $signif, bit => $bitScore, hdesc => $hdesc,
+                   qcover => $qcover, hcover => $hcover, hstrand => $strand,
+                   qcov => $qcover, hcov => $hcover,
+                   qstart => $qstart, qdesc => $qdesc,
+                   qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
+                   fracid => $frac_id, numhsps => $num_hsps);
+    push(@retlist, { %rethash });
+#    return($qname, $hname, $signif, $qcover, $hcover, $frac_id, $hlen);
+}
+push(@retlist, "\/\/");
+}
+return(@retlist);
+}
+# }}}
+
 # {{{ mkblastpdb (hash(inlist, outfile, title, format, faaname)) returns(nothing) 
 # writes a blast database with the outfile as basename.
 sub mkblastpdb {
@@ -193,6 +246,7 @@ sub blastp {
   if($args{naln}) { $naln = $args{naln}; }
   my $n_threads = 4;
   if($args{threads}) { $n_threads = $args{threads}; }
+  # print(STDERR "In blastp with $query\n");
 
 # Thu 25 Jul 2013
 # Changed -comp_based_stats to 2 in the blastp calls below
@@ -203,7 +257,9 @@ sub blastp {
 # a pair are reciprocal best hits or not.
 
   my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+  close($fh1);
   if(ref($query)) {
+    # print(STDERR "Doing reference $query\n");
     my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
     my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
     $seqout->write_seq($query);
@@ -212,9 +268,12 @@ sub blastp {
     unlink($fn);
   }
   elsif(-e $query and -r $query) {
+    # print(STDERR "Doing file $query\n");
     qx($blastbindir/blastp -num_descriptions $ndesc -num_alignments $naln  -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
   }
-  close($fh1);
+  else {
+    print(STDERR "Something wrong with the query file $query\n");
+  }
   open(BL, "<$fn1");
   while(<BL>) {
     print($ofh $_);
@@ -239,7 +298,7 @@ sub tblastn {
  my $outfmt = 0;
  if(exists($args{outfmt})) { $outfmt = $args{outfmt}; }
  my $task = $args{task};
- unless($task) { $task = 'blastn'; }
+ unless($task) { $task = 'tblastn'; }
  my $ntarg;
  if(exists($args{maxtargets})) {
  $ntarg = "-max_target_seqs $args{maxtargets} "; 
@@ -363,7 +422,7 @@ sub hspHashes {
   if($temp) { $format = $temp; }
   my $cA = chr(1);
 #print(STDERR "in topHit $filename\n");
-  my $searchio = new Bio::SearchIO( -format => $format,
+  my $searchio = Bio::SearchIO->new( -format => $format,
       -file   => $filename );
   my @retlist;
   while( my $result = $searchio->next_result() ) {
@@ -372,6 +431,7 @@ sub hspHashes {
     my $qdesc=$result->query_description();
     my $qlen=$result->query_length();
     while (my $hit = $result->next_hit()) {
+      my $num_hsps = $hit->num_hsps();
       while (my $hsp = $hit->next_hsp()) {
         my $hname=$hit->name();
         my $hlen=$hit->length();
@@ -394,10 +454,10 @@ sub hspHashes {
         my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
             signif => $signif, bit => $bitScore, qdesc => $qdesc, hdesc => $hdesc,
             hstrand => $strand, qstart => $qstart, hframe => $hframe,
-            qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
+            qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq, lah => $lah,
             fracid => $frac_id, fracsim => $frac_conserved, qcov => $qcov,
-            qstr => $hsp->query_string(),
-            hstr => $hsp->hit_string(),
+            qstr => $hsp->query_string(), numhsps => $num_hsps,
+            hstr => $hsp->hit_string(), expect => $signif,
             homolstr => $hsp->homology_string(),
             hcov => $hcov);
         push(@retlist, {%rethash});
@@ -595,6 +655,7 @@ while( my $result = $searchio->next_result() ) {
   while (my $hit = $result->next_hit()) {
     unless($hit->next_hsp()) { last; }
     my $hname=$hit->name();
+    my $num_hsps = $hit->num_hsps();
     my $hlen=$hit->length();
     my $frac_id = sprintf("%.3f", $hit->frac_identical());
     my $hdesc=$hit->description();
@@ -614,9 +675,10 @@ while( my $result = $searchio->next_result() ) {
     my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
                    signif => $signif, bit => $bitScore, hdesc => $hdesc,
                    qcover => $qcover, hcover => $hcover, hstrand => $strand,
+                   qcov => $qcover, hcov => $hcover,
                    qstart => $qstart, qdesc => $qdesc,
                    qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
-                   fracid => $frac_id);
+                   fracid => $frac_id, numhsps => $num_hsps);
     push(@retlist, { %rethash });
 #    return($qname, $hname, $signif, $qcover, $hcover, $frac_id, $hlen);
 }
@@ -705,6 +767,7 @@ unless($format) { $format = 'blast'; }
   if($hit) {
     my $hname=$hit->name();
     my $hlen=$hit->length();
+    my $num_hsps = $hit->num_hsps();
     my $frac_id = sprintf("%.3f", $hit->frac_identical());
     my $hdesc=$hit->description();
     my $signif=$hit->significance();
@@ -730,7 +793,7 @@ unless($format) { $format = 'blast'; }
         hlen => $hlen, qdesc => $qdesc, hit => $hit,
         signif => $signif, bit => $bitScore, hdesc => $hdesc,
         qcover => $qcover, hcover => $hcover, hstrand => $strand,
-        fracid => $frac_id,
+        fracid => $frac_id, numhsps => $num_hsps,
         frac_id => $frac_id, qstart => $qstart, qend => $qend,
         hstart => $hstart, hend => $hend);
     return(%rethash);
@@ -949,7 +1012,7 @@ sub reciblastp {
   my %reverse;
   if(%forward) {
   my $fhname = $forward{hname};
-#  carp($fhname);
+  # carp("Blast.pm: $fhname");
   my $revquery = $biodb->get_Seq_by_id($fhname);
     my($fh2, $fn2)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
     my $seqout2 = Bio::SeqIO->new(-fh => $fh2, -format => 'fasta');
@@ -975,12 +1038,110 @@ sub reciblastp {
 }
 # }}}
 
+# {{{ reciblastpn (hash(query, refdb, db, biodb, expect)).
+# Returns two hashrefs or one hashref and undef.
+# query is a faa file with a single sequence or a protein seqobj. This organism
+# is the reference.
+#
+# refdb is the reference blastp database. i.e. of the organism from which
+#       the query comes.
+#
+# db is the subject blastn database
+#
+# hitobj is a listref of Bio::Seq nucleotide objects from which the subsequence of the hit
+# can be retrieved (for reciprocal blasting).
+# expect is the evalue threshold
+
+sub reciblastpn {
+  my $self = shift(@_);
+  my %args = @_;
+  my $query = $args{query};
+  my $db = $args{db};
+  my $hitbiodb = $args{biodb};
+  my $refdb = $args{refdb};
+  my $evalue = $args{expect};
+  unless ($evalue) { $evalue = 1; }
+  my $outfmt = 0;
+
+# Note the use of -comp_based_stats to 2 in the blastp calls below.
+
+  my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+  close($fh1);
+  if(ref($query)) {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    $seqout->write_seq($query);
+    close($fh);
+    qx($blastbindir/tblastn -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+    unlink($fn);
+  }
+  elsif(-e $query and -r $query) {
+    qx($blastbindir/tblastn -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+  }
+    if($main::forblout) {
+    copy($fn1, $main::forblout);
+    }
+  my @tophsps = topHSPs($self, $fn1, "blast");
+  my %forward;
+  if(ref($tophsps[0])) {
+    %forward = %{$tophsps[0]};
+  }
+  unlink($fn1);
+
+  my %reverse;
+  if(%forward) {
+    my $fhname = $forward{hname};
+    my $sobj = $hitbiodb->get_Seq_by_id($forward{hname});
+    my $revquery;
+    if($forward{hstrand} == -1) {
+      $revquery = $sobj->trunc($forward{hstart}, $forward{hend})->revcom();
+    }
+    else {
+      $revquery = $sobj->trunc($forward{hstart}, $forward{hend});
+    }
+    my($fh2, $fn2)=tempfile($template, DIR => $tempdir, SUFFIX => '.fna');
+    my $seqout2 = Bio::SeqIO->new(-fh => $fh2, -format => 'fasta');
+    $seqout2->write_seq($revquery);
+    close($fh2);
+    if($main::revquery) {
+    copy($fn2, $main::revquery);
+    }
+    my($fh3, $fn3)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+    close($fh3);
+    qx($blastbindir/blastx -outfmt $outfmt -query $fn2 -db $refdb -evalue $evalue -out $fn3 -comp_based_stats 2 -seg no);
+    if($main::revblout) {
+    copy($fn3, $main::revblout);
+    }
+    my @tophsps = topHSPs($self, $fn3, "blast");
+    if(ref($tophsps[0])) {
+      %reverse = %{$tophsps[0]};
+    }
+# %reverse = tophit($self, $fn3, "blast");
+    unlink($fn2);
+    unlink($fn3);
+  }
+  else { return(); }
+
+  if(%forward and %reverse) {
+    return(\%forward, \%reverse);
+  }
+  elsif(%forward) {
+    return(\%forward, undef);
+  }
+  else {
+    return();
+  }
+}
+# }}}
+
+# {{{ sub justASub
 sub justASub {
 my $self = shift(@_);
 my %args = @_;
 print(join(" ", %args), "\n");
 return();
 }
+# }}} 
 
 # {{{ oldblastp (hash(query, db, expect, outfh, threads, naln, ndesc)).
 sub oldblastp {

@@ -5,7 +5,7 @@ our @EXPORT_OK = qw(
 tablist linelist tablistE linelistE tabhash tabhashE tabvals
 tablistV tablistVE linelistV linelistVE tablistH linelistH
 tablistER tablistVER linelistER linelistVER tabhashER tabhashVER
-ymd ddmyhms
+ymd ddmyhms csvsplit file2hash linelistserial
 );
 # use Sco::Common qw(tablist linelist tablistE linelistE tabhash tabhashE tabvals
 #                    tablistV tablistVE linelistV linelistVE);
@@ -15,6 +15,15 @@ my @days = qw(Sun Mon Tue Wed Thu Fri Sat);
 # {{{ subroutines tablist, linelist, tabhash and their *E versions.
 # The E versions are for printing to STDERR.
 # tabvals is also here.
+
+sub linelistserial {
+  my @in = @_;
+  my $serial = 0;
+  for my $el (@in) {
+    $serial += 1;
+    print("$serial\t$el\n");
+  }
+}
 
 sub tablistVER {
   if($main::verbose) {
@@ -175,6 +184,69 @@ return($xday, $mday, $month, $year, $rhour, $rmin, $rsec);
 }
 
 # }}}
+
+# {{{ sub csvsplit
+
+=head2 Sub csvsplit
+
+The string argument, typically a line read from a file,
+is split by commas. Any commas inside double quotes are
+ignored for the purpose of splitting.
+
+This implementation is probably not very efficient. It is
+certainly not flexible.
+
+
+=cut
+
+sub csvsplit {
+  my $in = shift(@_);
+  chomp($in);
+  my $tok;
+  my $qfl = 0;
+  my @tok;
+  for my $ch (split('', $in)) {
+    if($ch eq '"') { $qfl = $qfl == 0 ? 1 : 0; }
+    elsif($ch eq ",") {
+      if($qfl) {
+        $tok .= $ch;
+      }
+      else {
+        push(@tok, $tok);
+        $tok = '';
+      }
+    }
+    else { $tok .= $ch; }
+  }
+  if($tok) { push(@tok, $tok); }
+return(@tok);
+}
+# }}}
+
+# {{{ sub file2hash
+
+=head2 Sub file2hash
+
+Takes a two column file (tab separated) and returns
+a hash.
+
+=cut
+
+sub file2hash {
+  my $ifn = shift(@_);
+  open(my $ifh, "<", $ifn);
+  my %rethash;
+    while(my $line = readline($ifh)) {
+      chomp($line);
+      if($line=~m/^\s*\#/ or $line=~m/^\s*$/) {next;}
+      my @ll = split(/\t/, $line);
+      $rethash{$ll[0]} = $ll[1];
+    }
+    close($ifh);
+  return(%rethash);
+}
+# }}}
+
 
 return(1);
 

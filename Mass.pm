@@ -58,30 +58,40 @@ sub new {
 }
 # }}}
 
-
 # {{{ Internal sub _adduct. (mass, adductString);
 # This is the mass after modification.
 sub _adduct {
-my $mass = shift(@_);
-my $adduct = shift(@_);
+  my $mass = shift(@_);
+  my $adduct = shift(@_);
 
-if($adduct eq "None") {
-return($mass);
-}
-elsif($adduct eq "+H") {
-return($mass + $hydroion);
-}
-elsif($adduct eq "+2H") {
-return(($mass + $twohydroion)/2);
-}
-elsif($adduct eq "+Na") {
-return($mass + $sodium);
-}
-elsif($adduct eq "+Na+H") {
-return(($mass + $sodium + $hydroion)/2);
-}
+  if($adduct eq "None") {
+    return($mass);
+  }
+  elsif($adduct eq "+H") {
+    return($mass + $hydroion);
+  }
+  elsif($adduct eq "+2H") {
+    return(($mass + $twohydroion)/2);
+  }
+  elsif($adduct eq "+Na") {
+    return($mass + $sodium);
+  }
+  elsif($adduct eq "+Na+H") {
+    return(($mass + $sodium + $hydroion)/2);
+  }
+  elsif($adduct eq "-H") {
+    return($mass - $hydroion);
+  }
+  elsif($adduct eq "-2H") {
+    return(($mass - $twohydroion)/2);
+  }
 }
 # }}}
+
+### adducts to be considered for negative detection experiments
+# wanted by Andy on 5 April 2017
+# "-H" = Peptide mass - 1.0073
+# "-2H" = (Peptide mass - 2.0146)/2
 
 # {{{ sub adductedMasses3.
 # peptideSequence
@@ -261,6 +271,21 @@ sub masses {
 }
 # }}}
 
+# {{{ sub mass {
+sub mass {
+  my $self = shift(@_);
+  my $temp = shift(@_);
+  # my @mods = @_;
+  my $seq = uc($temp);
+  my $lumass = 0;
+  for my $aa (split("", $seq)) {
+    $lumass += $lut{$aa};
+  }
+  my $mass = $lumass + $water;
+  return($mass);
+}
+# }}}
+
 # {{{ ### sub charge ###
 sub somesub {
 my $self = shift(@_);
@@ -293,6 +318,9 @@ sub AUTOLOAD {
   }
 }
 # }}}
+
+
+
 
 
 return(1);
@@ -378,4 +406,26 @@ masses should be obtained (if I've done my maths correctly):
 
 An output list ordered by mass would be great (csv format or just different
 lines in a text file?). Accuracy of 4 decimal places will be ideal.
+
+=head2 Andy's email of 5 April 2017
+
+ Hi Govind,
+
+ Following my quick comment earlier today, the only changes that I’d like
+ are the following included in the check box section alongside the existing
+ adducts:
+
+ "-H" = Peptide mass - 1.0073
+
+ "-2H" = (Peptide mass - 2.0146)/2
+
+ This will mean that the calculator works for negative detection
+ experiments in the mass spec.
+
+ Cheers,
+
+ Andy
+
+=cut
+
 

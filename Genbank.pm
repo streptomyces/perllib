@@ -12,6 +12,7 @@ use parent qw(Sco::Fasta Sco::Global);
 use File::Temp qw(tempfile tempdir);
 my $tempdir = qw(/home/sco/volatile);
 my $template="genbankpmXXXXX";
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 
 # our @ISA = qw(Scoglobal);
 
@@ -180,6 +181,58 @@ sub gbkfile2fna {
 }
 # }}}
 
+# {{{ sub gbkLineage %(file or seqobj) returns a hash
+#   my %rethash = (accession => $acc, filename => $gbkfile, porg => $porg,
+#   description => $desc, binomial => $binomial, organism => $binomial,
+#   taxonomy => $taxonomy, linear => $linear, definition => $desc);
+
+sub gbkLineage {
+  my $self = shift(@_);
+  my %args = @_;
+  my ($seqio, $seqobj, $gbkfile);
+  if($args{file}) {
+  $gbkfile = $args{file};
+  $seqio=Bio::SeqIO->new(-file => $gbkfile);
+  $seqobj=$seqio->next_seq();
+  }
+  elsif($args{seqobj}) {
+    $seqobj = $args{seqobj};
+  }
+  unless($seqobj) { return(); }
+  my $acc=$seqobj->accession();
+  my ($species, @cl, $taxonomy, $binomial);
+  $species=$seqobj->species();
+  if($species) {
+    @cl = $species->classification();
+    $taxonomy = join("; ", reverse(@cl));
+    $binomial =$species->binomial('FULL');
+  }
+  else {
+    $taxonomy = undef;
+    $binomial = undef;
+  }
+  my $desc=$seqobj->description();
+  my $porg;
+  if($desc=~m/plasmid/i) { $porg = 'p'; }  else { $porg = 'g'; }
+  my $linear;
+  if($seqobj->is_circular()) {
+    $linear = 0;
+  }
+  else {
+    $linear = 1;
+  }
+  $desc=~s/\'/\'\'/g;
+  $taxonomy=~s/\'/\'\'/g;
+  $binomial=~s/\'/\'\'/g;
+  my %rethash = (accession => $acc, filename => $gbkfile, porg => $porg,
+  description => $desc, binomial => $binomial, organism => $binomial,
+  lineage => $taxonomy, linlist => \@cl, taxlist => \@cl,
+  taxonomy => $taxonomy, linear => $linear, definition => $desc);
+  return(%rethash);
+}
+
+# }}}
+
 # {{{ sub gbkVitals %(file or seqobj) returns a hash
 
 sub gbkVitals {
@@ -258,7 +311,6 @@ sub gbkVitals {
 
 # }}}
 
-
 # {{{ sub productfile (hash(accession|file,  outfilename,
 # optional:tagasid, features[]))
 # Writes products file to the outfilename.
@@ -336,6 +388,55 @@ close($ofh);
 }
 # }}}
 
+# {{{ sub chipseq_saffile (hash(accession|file, molecule, outfilename, by, prefix
+# Writes a saf file suitable for ChIPSeq work for the molecule to the outfilename.
+sub chipseq_saffile {
+my $self = shift(@_);
+my %args = @_;
+my $molecule = $args{molecule};
+my $gbkfile;
+my $pre = $args{prefix};
+$pre =~ s/_+$//;
+my $by = $args{by};
+
+if($args{accession}) {
+$gbkfile = $gbkDir . '/' . $args{accession} . '.gbk';
+}
+elsif($args{file}) {
+$gbkfile = $args{file};
+}
+
+my $seqio=Bio::SeqIO->new(-file => $gbkfile);
+
+my $ofh;
+open($ofh, ">$args{outfilename}");
+
+print $ofh <<"HEAD";
+GeneID\tChr\tStart\tEnd\tStrand\tPriTag
+HEAD
+
+my $seqobj=$seqio->next_seq();
+my $seqlen = $seqobj->length();
+my $start = 1;
+my $end = $start + ($by - 1);
+my $mid = int(($start + $end)/2);
+
+while($end <= $seqlen) {
+  my $id = $pre . "_" .  $mid;
+  print($ofh "$id\t$molecule\t$start\t$end\t+\tsection\n");
+  $start += $by;
+  $end = $start + ($by - 1);
+  $mid = int(($start + $end)/2);
+}
+if($start < $seqlen) {
+  $end = $seqlen;
+  $mid = int(($start + $end)/2);
+  my $id = $pre . "_" .  $mid;
+  print($ofh "$id\t$molecule\t$start\t$end\t+\tsection\n");
+}
+close($ofh);
+}
+# }}}
 
 # {{{ sub saffile (hash(accession|file, molecule, outfilename,
 # optional:tagasid, features[]))
@@ -605,8 +706,6 @@ sub seqobjFeatPrexSQLite {
 # {{{ sub gbkfile2pgtemp %(filename, handle, table)
 # returns Pg DBIahndle and tablename
 # Either a seqobj of a sequence filename have to be provided.
-# You may provide a filename for the SQLite database. If you
-# do not provide one then one is generated randomly.
 sub gbkfile2pgtemp {
   my $self = shift(@_);
   my %args = @_;
@@ -1142,44 +1241,83 @@ return(locus_tag => $locus_tag, product => $product, gene => $gene);
 # }}}
 
 # {{{ sub locusTag2aaObj %(file or seqobj, locus_tag) returns a single Bio::Seq object
+# Very inefficient. Use only if you need just one protein from a genbank file.
 sub locusTag2aaObj {
   my $self = shift(@_);
   my %args = @_;
   my $seqobj;
   if($args{file}) {
-  my $filename = $args{file};
-  unless (-e $filename) {
-  $filename = $gbkDir . '/' . $args{file};
-  }
-  my $seqio = Bio::SeqIO->new(-file => $filename);
-  $seqobj = $seqio->next_seq();
+    my $filename = $args{file};
+    unless (-e $filename) {
+      $filename = $gbkDir . '/' . $args{file};
+    }
+
+    my $incomingIsTemp = 0;
+    if($filename =~ m/\.gz$/) {
+      my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+      unless(gunzip $filename => $gbfh, AutoClose => 1) {
+        close($gbfh); unlink($gbfn);
+# next;
+        die "gunzip failed: $filename $GunzipError\n";
+      }
+      $filename = $gbfn;
+      $incomingIsTemp = 1;
+    }
+
+    my $seqio = Bio::SeqIO->new(-file => $filename);
+    while($seqobj = $seqio->next_seq()) {
+      my @features = $seqobj->all_SeqFeatures();
+      foreach my $feat (@features) {
+        unless ($feat->primary_tag() eq 'CDS') { next ; }
+        my @idtags = ("locus_tag", "old_locus_tag", "gene");
+        my $featid;
+        for my $idt (@idtags) {
+          if($feat->has_tag($idt)) {
+            my @lts = $feat->get_tag_values($idt);
+            if(grep {$_ eq $args{locus_tag}} @lts) {
+              my $aaobj = _feat_translate($feat);
+              my $product;
+              if($feat->has_tag('product')) {
+                $product = join(" ", $feat->get_tag_values('product'));
+              }
+              $aaobj->display_name($args{locus_tag});
+              $aaobj->description($product);
+              if($incomingIsTemp) { unlink($filename); }
+              return($aaobj);
+            }
+          }
+        }
+      }
+    }
+    if($incomingIsTemp) { unlink($filename); }
   }
   elsif($args{seqobj}) {
-  $seqobj = $args{seqobj};
+    $seqobj = $args{seqobj};
+    my @features = $seqobj->all_SeqFeatures();
+    foreach my $feat (@features) {
+      unless ($feat->primary_tag() eq 'CDS') { next ; }
+      my @idtags = ("locus_tag", "old_locus_tag", "gene");
+      my $featid;
+      for my $idt (@idtags) {
+        if($feat->has_tag($idt)) {
+          my @lts = $feat->get_tag_values($idt);
+          if(grep {$_ eq $args{locus_tag}} @lts) {
+            my $aaobj = _feat_translate($feat);
+            my $product;
+            if($feat->has_tag('product')) {
+              $product = join(" ", $feat->get_tag_values('product'));
+            }
+            $aaobj->display_name($args{locus_tag});
+            $aaobj->description($product);
+            return($aaobj);
+          }
+        }
+      }
+    }
   }
   else {
     return(undef);
   }
-
-  my @features = $seqobj->all_SeqFeatures();
-  foreach my $feat (@features) {
-    unless ($feat->primary_tag() eq 'CDS') { next ; }
-    if($feat->has_tag('locus_tag')) {
-      my @lts = $feat->get_tag_values('locus_tag');
-      if(grep {$_ eq $args{locus_tag}} @lts) {
-        my $aaobj = _feat_translate($feat);
-        my $product;
-        if($feat->has_tag('product')) {
-          $product = join(" ", $feat->get_tag_values('product'));
-        }
-        #print("=== $product\n");
-        $aaobj->display_name($args{locus_tag});
-        $aaobj->description($product);
-        return($aaobj);
-      }
-    }
-  }
-  return(undef);
 }
 # }}}
 
@@ -1246,37 +1384,56 @@ else {
 }
 
 my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
-
 my @gbkNames = @{$args{files}};
+my %entryCount = ();
 
 foreach my $temp (@gbkNames)  {
 my $filename;
-if($temp=~m/\//) { $filename = $temp; }
-else {
-$filename = $gbkDir . '/' . $temp;
-}
+  if(-e $temp) { $filename = $temp; }
+  elsif (-e "$gbkDir/$temp") { $filename = "$gbkDir/$temp"; }
+  else { croak("Could not find $temp genbank file\n"); }
+# Below is the bit to do if the filename ends in .gz. Typically .gbff.gz
+# although we check for .gz$ only.
+  my $incomingIsTemp = 0;
+  if($filename =~ m/\.gz$/) {
+  my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+  unless(gunzip $filename => $gbfh, AutoClose => 1) {
+    close($gbfh); unlink($gbfn);
+    next;
+    die "gunzip failed: $GunzipError\n";
+  }
+  $filename = $gbfn;
+  $incomingIsTemp = 1;
+  }
 
-my ($dispname, $dir, $ext)= fileparse($temp, qr/\.[^.]*/);
+my ($dispname, $dir, $ext)= fileparse($temp, qr/\..*/);
 my $seqio = Bio::SeqIO->new(-file => $filename);
-my $seqobj = $seqio->next_seq();
-$seqobj->display_name($dispname);
+# linelistE($dispname);
+my $entCnt = 1;
+while(my $seqobj = $seqio->next_seq()) {
+$seqobj->display_id($dispname . "_" . $entCnt);
 $seqout->write_seq($seqobj);
+$entCnt += 1;
+}
+$entryCount{$dispname} = $entCnt - 1;
+if($incomingIsTemp) { unlink($filename); }
 }
 close($fh);
+
 my $runbin = $blastbindir ."/makeblastdb";
 qx($runbin -in $fn -title "$args{title}" -dbtype nucl -out $args{name});
 #print(STDERR "$fn\n");
 unless($keepfna) { unlink($fn); }
 if($keepfna) {
-return(name => $args{name}, files => [@gbkNames], fnafn => $fn);
+return(name => $args{name}, files => [@gbkNames], entryCount => \%entryCount, fnafn => $fn);
 }
 else {
-return(name => $args{name}, files => [@gbkNames]);
+return(name => $args{name}, entryCount => \%entryCount, files => [@gbkNames]);
 }
 }
 # }}}
 
-# {{{ sub genbank2blastpDB %([files], name, title, faafn)
+# {{{ sub genbank2blastpDB %([files], name, title, faafn, locinfo)
 # returns %(name, [files], faafn);
 # If you supply a faafn then it is your responsibility to unlink it.
 sub genbank2blastpDB {
@@ -1299,6 +1456,7 @@ my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
 my @gbkNames = @{$args{files}};
 
 my $cdsCnt = 0;
+  my $contig_serial = 0;
 foreach my $temp (@gbkNames)  {
   my $draftName = $draftDir . '/' . $temp;
   my $finName = $gbkDir . '/' . $temp;
@@ -1307,10 +1465,27 @@ foreach my $temp (@gbkNames)  {
   elsif (-e $finName) { $filename = $finName; }
   elsif (-e $draftName) { $filename = $draftName; }
   else { croak("Could not find $temp genbank file\n"); }
-my $seqio = Bio::SeqIO->new(-file => $filename);
-my $seqobj = $seqio->next_seq();
+
+  my $incomingIsTemp = 0;
+  if($filename =~ m/\.gz$/) {
+  my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+  unless(gunzip $filename => $gbfh, AutoClose => 1) {
+    close($gbfh); unlink($gbfn);
+    # next;
+    die "gunzip failed: $filename $GunzipError\n";
+  }
+  $filename = $gbfn;
+  $incomingIsTemp = 1;
+  }
+
+  my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
+  while(my $seqobj = $seqio->next_seq()) {
   foreach my $feature ($seqobj->all_SeqFeatures()) {
+
     if($feature->primary_tag() eq 'CDS') {
+      my $f_start = $feature->start();
+      my $f_end = $feature->end();
+      my $f_strand = $feature->strand();
       $cdsCnt += 1;
       my $product;
       my $id;
@@ -1325,8 +1500,14 @@ my $seqobj = $seqio->next_seq();
           $id = $lt;
         }
         if($tag=~m/gene/) {
-          my $temp=join("|", $feature->get_tag_values($tag));
-          $gene = $temp;
+          if($tag eq 'gene' and (not $feature->has_tag("locus_tag"))) {
+            my @temp = $feature->get_tag_values($tag);
+            $id = $temp[0];
+          }
+          else {
+            my @temp = $feature->get_tag_values($tag);
+            $gene = join("|", @temp);
+          }
         }
       }
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
@@ -1334,11 +1515,20 @@ my $seqobj = $seqio->next_seq();
       my $aaobj = _feat_translate($feature);
       $aaobj->display_name($id);
       if($gene) { $product .= " gene: $gene"; }
-      $aaobj->description($product);
+      my $desc;
+      if($args{locinfo}) {
+        $desc = "$f_start $f_end $f_strand $contig_serial $product";
+      }
+      else { $desc = $product; }
+      $aaobj->description($desc);
       $seqout->write_seq($aaobj);
     }
+
+  }
+    $contig_serial += 1;
   }
 #$emblout->write_seq($seqobj);
+if($incomingIsTemp) { unlink($filename); }
 }
 close($fh);
 if($cdsCnt) {
@@ -1350,10 +1540,11 @@ qx($runbin -in $fn -title "$args{title}" -dbtype prot -out $args{name});
 unless($keepfaa) { unlink($fn); }
 if($cdsCnt) {
   if($keepfaa) {
-return(name => $args{name}, files => [@gbkNames], faafn => $fn);
+return(name => $args{name}, files => [@gbkNames], faafn => $fn,
+       numContigs => $contig_serial);
   }
   else {
-return(name => $args{name}, files => [@gbkNames]);
+return(name => $args{name}, files => [@gbkNames], numContigs => $contig_serial);
   }
 }
 else {
@@ -1523,10 +1714,34 @@ else {
 }
 # }}}
 
-# {{{ sub genbank2faa %([files], old_locus_tag, ofh, tfh, orgname, seqid)
+# {{{ sub tags (genbankfilename);
 # returns %(name, [files]);
-# orgname defaults to 1. Organism name in description.
+sub tags {
+  my $self = shift(@_);
+  my $filename = shift(@_);
+  my $seqio = Bio::SeqIO->new(-file => $filename);
+  my %tags;
+  while(my $seqobj = $seqio->next_seq()) {
+    my @temp = $seqobj->all_SeqFeatures();
+    foreach my $feat (@temp) {
+      my $pritag = $feat->primary_tag();
+      $tags{$pritag}->{cnt} += 1;
+      my @tags = $feat->get_all_tags();
+      for my $tag (@tags) {
+        $tags{$pritag}->{$tag} += 1;
+      }
+    }
+  }
+  return(%tags);
+}
+# }}}
+
+# {{{ sub genbank2faa %([files], old_locus_tag, ofh, tfh, orgname, seqid, binomial, lig)
+# returns %(name, [files]);
+# orgname defaults to 1. Boolean Organism name in description.
+# binomial. string. Name to use if organism binomial is not found in the genbank file.
 # seqid defaults to 1. Sequence id in description.
+# lig. boolean. defaults to 0. include location in genome in the description.
 # tfh is optional. If a filehandle is given then a table of CDS is written
 # to that filehandle and the filehandle closed.
 sub genbank2faa {
@@ -1574,6 +1789,9 @@ my $binomial;
 if($species) {
 $binomial = $species->binomial('FULL');
 }
+unless($binomial =~ m/\w+/) {
+if($args{binomial}) { $binomial = $args{binomial}; }
+}
   my @temp = $seqobj->all_SeqFeatures();
   foreach my $feature (sort _feat_sorter @temp) {
     if($feature->primary_tag() eq 'CDS') {
@@ -1609,6 +1827,7 @@ $binomial = $species->binomial('FULL');
 
       my $lig = $feature->start() . ":" . $feature->end(); # location in genbank
       $lig .= ":" . $feature->strand();
+      # print(STDERR "\$lig: $lig\n");
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
       unless($id) { $id = $gbkBn . "_" . sprintf("%05d", $cdsCnt); }
       my $aaobj = _feat_translate($feature);
@@ -1616,18 +1835,30 @@ $binomial = $species->binomial('FULL');
       $aaobj->display_name($id);
       if($gene) { $product .= " gene: $gene"; }
       if($binomial) {
-      my $desc = $product;
+        my @desc;
+        if($args{lig}) {
+          push(@desc, $lig);
+        }
+        if($product) {
+          push(@desc, $product);
+        }
         if($seqidInDesc) {
-          $desc .= " ". $seqid;
+          push(@desc, $seqid);
         }
         if($orgnInDesc) {
-          $desc .= " : " . $binomial;
+          push(@desc, $binomial);
         }
-      $aaobj->description($desc);
+      $aaobj->description(join(" : ", @desc));
       }
       else {
-      my $desc = $seqid . " " . $product;
-      $aaobj->description($desc);
+        my @desc;
+        if($args{lig}) {
+          push(@desc, $lig);
+        }
+        if($product) {
+          push(@desc, $product);
+        }
+      $aaobj->description(join(" : ", @desc));
       }
       $seqout->write_seq($aaobj);
       if($tableWanted) {
@@ -2200,15 +2431,15 @@ sub _feat_translate {
   my $feature=shift(@_);
   my $codon_start=1;
   if($feature->has_tag('codon_start')) {
-      ($codon_start) = $feature->get_tag_values('codon_start');
-      }
-      my $aaobj;
-      eval {
-      my $offset=1;
-      if($codon_start > 1) { $offset = $codon_start;}
-      my $featobj=$feature->spliced_seq(-nosort => '1');
-      $aaobj = $featobj->translate(-offset => $offset, -complete => 1);
-      };
+    ($codon_start) = $feature->get_tag_values('codon_start');
+  }
+  my $aaobj;
+  eval {
+    my $offset=1;
+    if($codon_start > 1) { $offset = $codon_start;}
+    my $featobj=$feature->spliced_seq(-nosort => '1');
+    $aaobj = $featobj->translate(-offset => $offset, -complete => 1);
+  };
   return($aaobj);
 }
 # }}}
@@ -2548,6 +2779,7 @@ $binomial = $species->binomial('FULL');
       }
       my $lig = $feature->start() . ":" . $feature->end(); # location in genbank
       $lig .= ":" . $feature->strand();
+      # print(STDERR "\$lig: $lig\n");
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
       # unless($id) { $id = $gbkBn . "_" . sprintf("%05d", $cdsCnt); }
       $id = $seqid . "_" . sprintf("%05d", $cdsCnt);
@@ -2582,7 +2814,6 @@ close($tfh);
 }
 # }}}
 
-
 # {{{ sub subgenbank. hash(infile, start, end). Returns a Bio::Seq.
 # optional keys: outformat
 sub subgenbank {
@@ -2595,6 +2826,8 @@ sub subgenbank {
 
   my $seqio = Bio::SeqIO->new(-file => $ingbk);
   my $seqobj=$seqio->next_seq();
+  my $inlen = $seqobj->length();
+  if($end > $inlen) { $end = $inlen; }
   my $subseqstr = $seqobj->subseq($start, $end);
 
   my $outobj = Bio::Seq->new(-seq => $subseqstr);
@@ -2602,7 +2835,9 @@ sub subgenbank {
   my @ft = $seqobj->get_all_SeqFeatures();
   my @oft;
   for my $ft (@ft) {
-    if($ft->start() >= $start and $ft->end() <= $end) {
+    my @temp = $ft->location()->each_Location();
+    my $nloc = scalar(@temp);
+    if($nloc == 1 and $ft->start() >= $start and $ft->end() <= $end) {
       push(@oft, $ft);
     }
   }

@@ -20,13 +20,99 @@ sub new {
 
 ### more subs go below ###
 
-# {{{ hspHashes (blastOutputFileName, format) returns(list of hashes(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
+# {{{ sub scan (%(aaseq, hmmdb, name));
+# aaseq can be Bio::Seq or Fasta filename or AA sequence.
+#
+sub scan {
+  my $self = shift(@_);
+  my %args = @_;
+  my $aaseq = $args{aaseq};
+  my $hmmdb;
+  if(exists($args{hmmdb})) {
+    $hmmdb = $args{hmmdb};
+  }
+  else {
+    $hmmdb = "/home/sco/blast_databases/pfam/Pfam-A.hmm";
+  }
+  my $aafile;
+  my $deleteQuery = 1;
+  if(ref($aaseq)) {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => ".faa");
+    my $seqio = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    $seqio->write_seq($aaseq);
+    close($fh);
+    $aafile = $fn;
+  }
+  elsif(-s $aaseq) {
+    $aafile = $aaseq;
+    $deleteQuery = 0;
+  }
+  elsif(exists($args{name}) and exists($args{aaseq})) {
+    my $outobj = Bio::Seq->new(-seq => $args{aaseq});
+    $outobj->display_id($args{name});
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => ".faa");
+    my $seqio = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    $seqio->write_seq($outobj);
+    close($fh);
+    $aafile = $fn;
+  }
+  else {
+    croak("$aaseq could not be resolved to a filename or Bio::Seq object and no name is provided");
+  }
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => ".hmmscan");
+    close($fh);
+    my $xstr = qq(hmmscan --acc -o $fn $hmmdb $aafile);
+    qx($xstr);
+    if($deleteQuery) { unlink($aafile); }
+    return($fn);
+}
+# }}}
+
+# {{{ hmm3lengths
+
+sub hmm3length {
+  my $self = shift(@_);
+  my %args = @_;
+  open(HMM, "<", $args{hmmfile});
+  local $/="\n//\n";
+  my %retlist;
+  my @rows = qw(NAME ACC DESC LENG);
+  while(my $hmm = readline(HMM)) {
+    my %recout;
+    my @lines = split(/\n/, $hmm);
+    for my $line (@lines) {
+      my @ll = split(/\s+/, $line, 2);
+      if(grep {$_ eq $ll[0]} @rows) {
+        $recout{$ll[0]} = $ll[1];
+      }
+    }
+    $retlist{$recout{ACC}} = \%recout;
+  }
+  close(HMM);
+  return(%retlist);
+}
+
+
+# }}}
+
+
+# {{{ hspHashes (hash(infile, format, hmmfile))
+# returns(list of hashes(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
 sub hspHashes {
   my $self = shift(@_);
-  my $filename=shift(@_);
+  my %args = @_;
+
+  my $filename = $args{infile};
   my $format = 'hmmer';
-  my $temp = shift(@_);
-  if($temp) { $format = $temp; }
+  if($args{format}) { $format = $args{format}; }
+
+  my %lens;
+  if($args{hmmfile}) {
+    %lens = $self->hmm3length(hmmfile => $args{hmmfile});
+  }
+
+
+
 #print(STDERR "in topHit $filename\n");
   my $searchio = new Bio::SearchIO( -format => $format,
       -file   => $filename );
@@ -39,15 +125,20 @@ sub hspHashes {
     while (my $hit = $result->next_hit()) {
       while (my $hsp = $hit->next_hsp()) {
         my $hname=$hit->name();
-        my $hlen=$hit->length();
         my $frac_id = sprintf("%.3f", $hsp->frac_identical());
         my $frac_conserved = sprintf("%.3f", $hsp->frac_conserved());
-        my $hdesc=$hit->description();
         my $signif=$hsp->significance();
         my $laq=$hsp->length('query');
         my $lah=$hsp->length('hit');
         my $qcov = sprintf("%.3f", $laq/$qlen);
-        # my $hcov = sprintf("%.3f", $lah/$hlen);
+        my $hlen;
+        my $hcov = 0;
+        my $hdesc=$hit->description();
+        if(exists($lens{$hname})) {
+        $hlen = $lens{$hname}->{LENG};
+        $hcov = sprintf("%.3f", $lah/$hlen);
+        $hdesc = $lens{$hname}->{DESC};
+        }
         my $qstart = $hsp->start('query');
         my $qend = $hsp->end('query');
         my $hstart = $hsp->start('hit');
@@ -57,10 +148,10 @@ sub hspHashes {
         my $strand = $hsp->strand('hit');
         my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
             signif => $signif, bit => $bitScore, qdesc => $qdesc, hdesc => $hdesc,
-            hstrand => $strand, qstart => $qstart, hframe => $hframe,
+            hstrand => $strand, qstart => $qstart, hframe => $hframe, lah => $lah,
             qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
             fracid => $frac_id, fracsim => $frac_conserved, qcov => $qcov,
-            hcov => "replaced");
+            hcov => $hcov);
         push(@retlist, {%rethash});
       }
     }

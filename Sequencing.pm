@@ -72,15 +72,16 @@ sub bowtieFlags {
   my $binStr = sprintf("%0.8b", $flag);
   my @keys =  qw(paired alnPE noAln noAlnPE revStrand mateOnRev mate1 mate2);
   my @bf = split(//, $binStr);
-  if($bf[7]) {$rethash{paired} = 1;} else {$rethash{paired} = 0;}
-  if($bf[6]) {$rethash{alnPE} = 1;} else {$rethash{alnPE} = 0;}
-  if($bf[5]) {$rethash{noAln} = 1;} else {$rethash{noAln} = 0;}
-  if($bf[4]) {$rethash{noAlnPE} = 1;} else {$rethash{noAlnPE} = 0;}
-  if($bf[3]) {$rethash{revStrand} = 1;} else {$rethash{revStrand} = 0;}
-  if($bf[2]) {$rethash{mateOnRev} = 1;} else {$rethash{mateOnRev} = 0;}
-  if($bf[1]) {$rethash{mate1} = 1;} else {$rethash{mate1} = 0;}
-  if($bf[0]) {$rethash{mate2} = 1;} else {$rethash{mate2} = 0;}
-  return({%rethash}, [@keys]);
+  @bf = reverse(@bf);
+  if($bf[0]) {$rethash{paired} = 1;} else {$rethash{paired} = 0;}
+  if($bf[1]) {$rethash{alnPE} = 1;} else {$rethash{alnPE} = 0;}
+  if($bf[2]) {$rethash{noAln} = 1;} else {$rethash{noAln} = 0;}
+  if($bf[3]) {$rethash{noAlnPE} = 1;} else {$rethash{noAlnPE} = 0;}
+  if($bf[4]) {$rethash{revStrand} = 1;} else {$rethash{revStrand} = 0;}
+  if($bf[5]) {$rethash{mateOnRev} = 1;} else {$rethash{mateOnRev} = 0;}
+  if($bf[6]) {$rethash{mate1} = 1;} else {$rethash{mate1} = 0;}
+  if($bf[7]) {$rethash{mate2} = 1;} else {$rethash{mate2} = 0;}
+  return(\%rethash, \@keys);
 }
 # }}}
 

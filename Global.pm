@@ -588,25 +588,24 @@ return(qq(Content-type: text/html\n\n));
 
 # {{{ sub hammingDistance hash(string1, string2) returns an integer.
 sub hammingDistance {
-my $self = shift(@_);
-my %args = @_; 
-my $string1 = $args{string1};
-my $string2 = $args{string2};
+  my $self = shift(@_);
+  my %args = @_; 
+  my $string1 = $args{string1};
+  my $string2 = $args{string2};
 
-if(length($string1) != length($string2)) {
-carp("Unequal string lengths ", length($string1), "  ", length($string2), "\n");
-return(0);
+  if(length($string1) != length($string2)) {
+    carp("Unequal string lengths ", length($string1), "  ", length($string2), "\n");
+    return(0);
+  }
+  my $lastdx = length($string1) - 1;
+  my $distance = 0;
+  foreach my $idx (0..$lastdx) {
+    if(substr($string1, $idx, 1) ne substr($string2, $idx, 1)) {
+      $distance += 1;
+    }
+  }
+  return($distance);
 }
-my $lastdx = length($string1) - 1;
-my $distance = 0;
-foreach my $idx (0..$lastdx) {
-if(substr($string1, $idx, 1) ne substr($string2, $idx, 1)) {
-$distance += 1;
-}
-}
-return($distance);
-}
-
 # }}}
 
 # {{{ sub revcom hash(string) returns as string

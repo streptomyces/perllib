@@ -1,6 +1,8 @@
 package Sco::Codon;
 use 5.14.0;
 our $AUTOLOAD;
+use Bio::SeqIO;
+use lib qw(/home/sco /home/sco/perllib);
 
 # {{{ ### class data and methods ###
 {
@@ -97,6 +99,9 @@ my %a2c;
 _aa2codons();
 
 # {{{ sub new {
+# The returned instance will contain two hashrefs.
+# $self->{c2a}
+# $self->{a2c}
 sub new {
   my($class, $self);
   $class=shift(@_);
@@ -112,6 +117,21 @@ sub new {
   return($self);
 }
 # }}}
+
+sub cutable {
+my $self = shift(@_);
+my %args = @_;
+my $infile = $args{file};
+my $seqio=Bio::SeqIO->new(-file => $infile);
+while(my $seqobj=$seqio->next_seq()) {
+  foreach my $feature ($seqobj->all_SeqFeatures()) {
+    if($feature->primary_tag() eq 'CDS') {
+      my $aaobj = Sco::Genbank->feat_translate($feature);
+}
+
+}
+}
+}
 
 # {{{ ### sub AUTOLOAD ###
 sub AUTOLOAD {

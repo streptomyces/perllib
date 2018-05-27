@@ -5,8 +5,15 @@ use Bio::Seq;
 our $AUTOLOAD;
 use lib qw(/home/sco /home/sco/perllib);
 use parent qw(Sco::Global);
+use Bio::DB::Fasta;
+use File::Spec;
+use File::Temp qw(tempfile tempdir);
+my $tempdir = qw(/home/sco/volatile);
+my $template="fastapmXXXXX";
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 
 my $soukDataDir = '/home/nouser/souk/data';
+my $blastbindir = qq(/usr/local/bin);
 
 # {{{ new
 sub new {
@@ -292,15 +299,77 @@ return($dir . '/' . $file . '.fas');
 }
 # }}}
 
-# {{{ sub fasta2blastpDB %(file, name, title) returns %(name, file);
-sub genbank2blastpDB {
+# {{{ sub fasta2blastpDB %(file, bldbname, title, faafile)
+# returns %(bldbname, infile, faafile);
+sub fasta2blastpDB {
 my $self = shift(@_);
 my %args = @_;
-qx(/usr/local/blastplus/bin/makeblastdb -in $args{file} -title "$args{title}" -dbtype prot -out $args{name});
-print(STDERR qq(/usr/local/blastplus/bin/makeblastdb -in $args{file} -title "$args{title}" -dbtype prot -out $args{name}), "\n");
-return(name => $args{name}, file => $args{file});
+#_dumphash(%args);
+
+  my $filename = $args{file};
+  my $incomingIsTemp = 0;
+
+  my($faafh, $faafn);
+  if($filename =~ m/\.gz$/) {
+    if($args{faafile}) {
+      $faafn = $args{faafile};
+      open($faafh, ">", $faafn);
+    }
+    else {
+      ($faafh, $faafn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    }
+
+    unless(gunzip $filename => $faafh, AutoClose => 1) {
+      close($faafh); unlink($faafn);
+      die "gunzip failed: $filename $GunzipError\n";
+    }
+    $filename = $faafn;
+    $incomingIsTemp = 1;
+  }
+
+my $mkbldbbin = File::Spec->catfile($blastbindir, "makeblastdb");
+qx($mkbldbbin -in $filename -title "$args{title}" -dbtype prot -out $args{bldbname});
+# print(STDERR qq($mkbldbbin -in $filename -title "$args{title}" -dbtype prot -out $args{bldbname}), "\n");
+if($incomingIsTemp) {
+  unless($args{faafile}) {
+    unlink($filename);
+  }
+}
+return(bldbname => $args{bldbname}, infile => $args{file}, faafile => $faafn);
 }
 # }}}
+
+# {{{ sub selectEntries. hash(infile, ofh, \@ids)
+sub selectEntries {
+my $self = shift(@_);
+my %args = @_;
+my $infile = $args{infile};
+my $ofh = $args{ofh};
+my $listref = $args{ids};
+
+my $seqout = Bio::SeqIO->new(-fh => $ofh, -format => "fasta");
+
+# tie my %fas, 'Bio::DB::Fasta', $infile;
+my $biodb = Bio::DB::Fasta->new($infile);
+
+
+
+my $outcnt = 0;
+for my $id (@{$listref}) {
+my $seq = $biodb->seq($id);
+my $head = $biodb->header($id);
+my $desc = $head;
+$desc =~ s/^\w+\s+//;
+my $seqobj = Bio::Seq->new(-seq => $seq, -display_id => $id);
+$seqobj->description($desc);
+if($seqobj) {
+$seqout->write_seq($seqobj);
+  $outcnt += 1;
+}
+}
+return($outcnt);
+}
+
 
 # {{{ sub id2seqobj ( hash(file, id) ). Returns a single Bio::Seq object.
 sub id2seqobj {
@@ -648,8 +717,17 @@ sub allProteinsMax {
 # }}}
 
 
+sub _dumphash {
+  my %inh = @_;
+  for my $key (keys %inh) {
+    print("$key\t$inh{$key}\n");
+  }
+}
+
+
 
 return(1);
+
 
 
 

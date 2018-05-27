@@ -9,15 +9,16 @@ use LWP::Simple;
 use Bio::SeqIO;
 use Bio::Seq;
 use Net::FTP;
+use File::Spec;
 use File::Temp qw(tempfile tempdir);
 my $template='ScoNCBIXXXXX';
 my $dir='/home/sco/volatile';
 #$ENV{http_proxy}='http://wwwcache.bbsrc.ac.uk:8080';
-
 our $AUTOLOAD;
 use lib qw(/home/sco /home/sco/perllib);
 use Scoglobal;
 our @ISA = qw(Scoglobal);
+
 
 
 # {{{ Class variables
@@ -28,7 +29,6 @@ my $ftp=Net::FTP->new(Host => "ftp.ncbi.nih.gov", Passive => 1);
 my $draftDir = qq(genomes/ASSEMBLY_BACTERIA);
 my $finishedDir = qq(genomes/Bacteria);
 # }}}
-
 
 
 # {{{ new
@@ -46,6 +46,7 @@ sub new {
   return($self);
 }
 # }}}
+
 
 # {{{ sub genus hash(type => finished or draft, genus). Returns a list.
 # type is essential.
@@ -222,6 +223,7 @@ else {
 }
 # }}}
 
+
 # {{{ sub ntAccession2UID (nucleotide_accession) returns (UID) {
 sub ntAccession2UID {
   my $self = shift(@_);
@@ -244,6 +246,7 @@ my $uid=$tree->{IdList}->{Id};
 return($uid);
 }
 # }}}
+
 
 # {{{ sub accession2UID hash(accession, database) returns (UID) {
 sub accession2UID {
@@ -271,6 +274,62 @@ my $uid=$tree->{IdList}->{Id};
 return($uid);
 }
 # }}}
+
+
+# {{{ sub getByFTP hash(assemSummaryFile, outdir, what)
+sub getByFTP {
+  my $self = shift(@_);
+  my %args = @_;
+  my $asf = $args{assemSummaryFile};
+  my $outdir = $args{outdir};
+  my $wr = $args{what};
+  my @what = @{$wr};
+  my $conn = Net::FTP->new(Host => "ftp.ncbi.nlm.nih.gov", Timeout => 300)
+    or die("Failed to connect.");
+  $conn->login("anonymous", 'govind.chandra@jic.ac.uk')
+    or die("Failed to login");
+  $conn->binary();
+  my $initdir = $conn->pwd();
+  print(STDERR "$initdir\n");
+  open(my $afh, "<", $asf);
+  while(my $line = readline($afh)) {
+    chomp($line);
+    my @ll = split(/\t/, $line);
+    my $ftpurl = $ll[19];
+    my @fl = split(/\/+/, $ftpurl);
+    my $discard = shift(@fl);
+    my $site = shift(@fl);
+    my $dir = join("/", @fl);
+    my $finalDir = pop(@fl);
+    print(STDERR "$site\t$dir\t$finalDir\n");
+    $conn->cwd($dir);
+    if($what[0] =~ m/^list/i) {
+      $conn->ascii();
+      my @listing = $conn->ls();
+      my $ofn = File::Spec->catfile($outdir, $finalDir);
+      open(my $ofh, ">", $ofn);
+      print($ofh join("\n", @listing));
+      close($ofh);
+    }
+    else {
+      $conn->ascii();
+      my @listing = $conn->ls();
+      for my $rfn (@listing) {
+        if(grep {$rfn =~ m/$_$/} @what) {
+          if($rfn =~ m/gz$/) { $conn->binary(); }
+          my $ofn = File::Spec->catfile($outdir, $rfn);
+          $conn->get($rfn, $ofn) or print(STDERR "Failed to get $rfn\n");
+        }
+      }
+    }
+    $conn->cwd($initdir); # Defaults to go back to the root directory
+  }
+  close($afh);
+  $conn->close();
+  $conn->quit();
+}
+# }}}
+
 
 return(1);
 
