@@ -438,6 +438,60 @@ close($ofh);
 }
 # }}}
 
+# {{{ sub chipseq_bedfile (hash(accession|file, molecule, outfilename,
+# optional:tagasid, features[]))
+# Writes bed file for the molecule to the outfilename.
+sub chipseq_bedfile {
+my $self = shift(@_);
+my %args = @_;
+my $molecule = $args{molecule};
+my $gbkfile;
+my $pre = $args{prefix};
+$pre =~ s/_+$//;
+my $by = $args{by};
+
+if($args{accession}) {
+$gbkfile = $gbkDir . '/' . $args{accession} . '.gbk';
+}
+elsif($args{file}) {
+$gbkfile = $args{file};
+}
+
+my $seqio=Bio::SeqIO->new(-file => $gbkfile);
+
+my $ofh;
+open($ofh, ">$args{outfilename}");
+
+
+print $ofh <<"TRACK";
+track\tname=ChIP\tdescription="ChIP"\tuseScore=0\tvisibility=1\titemRgb=on\tcolor=100,20,20
+TRACK
+
+my $seqobj=$seqio->next_seq();
+my $seqlen = $seqobj->length();
+my $start = 0;
+my $end = $start + ($by - 1);
+my $mid = int(($start + $end)/2);
+
+while($end <= $seqlen) {
+  my $id = $pre . "_" .  $mid;
+  print($ofh "$molecule\t$start\t$end\t$id\n");
+  $start += $by;
+  $end = $start + ($by - 1);
+  $mid = int(($start + $end)/2);
+}
+if($start < $seqlen) {
+  $end = $seqlen;
+  $mid = int(($start + $end)/2);
+  my $id = $pre . "_" .  $mid;
+  print($ofh "$molecule\t$start\t$end\t$id\n");
+  # print($ofh "$id\t$molecule\t$start\t$end\t+\tsection\n");
+}
+
+close($ofh);
+}
+# }}}
+
 # {{{ sub saffile (hash(accession|file, molecule, outfilename,
 # optional:tagasid, features[]))
 # Writes saf file for the molecule to the outfilename.
@@ -565,9 +619,12 @@ track\tname=$track\tdescription="Features"\tuseScore=0\tvisibility=1\titemRgb=on
 TRACK
 
 # print("track\tname=Features\tdescription="Features"\tuseScore=0\tvisibility=1\tcolor=255,255,255");
+my %ptCnt; # primary tag counts.
+
 while(my $seqobj=$seqio->next_seq()) {
   foreach my $feature ($seqobj->all_SeqFeatures()) {
     my $pritag = $feature->primary_tag();
+    $ptCnt{$pritag} += 1;
 
     if(grep {$_ eq $pritag} @do_feats) {
       my $start = $feature->start();
@@ -598,7 +655,7 @@ while(my $seqobj=$seqio->next_seq()) {
           $id = $ids{$key};
         }
       }
-      unless($id) {$id = $pritag;}
+      unless($id) {$id = $pritag . "_" . $ptCnt{$pritag};}
       my $bedstart = $start - 1;
       print($ofh "$molecule\t$bedstart\t$end\t$id\t$score\t$strand\t$bedstart\t$end\t$itemrgb\n");
     }
