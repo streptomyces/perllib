@@ -2629,7 +2629,9 @@ sub lt2faa {
 }
 # }}}
 
-# {{{ sub lt2fna %(file, locus_tag, ofh) returns 1
+# {{{ sub lt2fna %(file, locus_tag, ofh) returns a list of ntseq objects.
+# if ofh is a filehandle then sequence(s) are written to this
+# filehandle and it is closed just before returning.
 sub lt2fna {
   my $self = shift(@_);
   my %args = @_;
@@ -2649,9 +2651,13 @@ sub lt2fna {
   elsif($args{seqobj}) {
   $seqobj = $args{seqobj};
   }
-
-  my $seqout = Bio::SeqIO->new(-fh => $args{ofh}, -format => 'fasta');
+  
+  my $seqout;
+  if(ref($args{ofh}) eq 'GLOB') {
+  $seqout = Bio::SeqIO->new(-fh => $args{ofh}, -format => 'fasta');
+  }
   my @features = $seqobj->all_SeqFeatures();
+  my @ntobjs;
   foreach my $feat (@features) {
     unless ($feat->primary_tag() eq 'CDS') { next ; }
     if($feat->has_tag('locus_tag')) {
@@ -2665,12 +2671,17 @@ sub lt2fna {
         #print("=== $product\n");
         $ntobj->display_name($args{locus_tag});
         $ntobj->description($product);
-        $seqout->write_seq($ntobj);
+        push(@ntobjs, $ntobj);
+        if(ref($seqout)) {
+          $seqout->write_seq($ntobj);
+        }
       }
     }
   }
+  if(ref($seqout)) {
   close($args{ofh});
-  return(1);
+  }
+  return(@ntobjs);
 }
 # }}}
 
