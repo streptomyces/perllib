@@ -343,8 +343,8 @@ my $seqio=Bio::SeqIO->new(-file => $gbkfile);
 my $ofh;
 open($ofh, ">$args{outfilename}");
 
-my $seqobj=$seqio->next_seq();
-foreach my $feature ($seqobj->all_SeqFeatures()) {
+while(my $seqobj=$seqio->next_seq()) {
+for my $feature ($seqobj->all_SeqFeatures()) {
   my $pritag = $feature->primary_tag();
   if(grep {$_ eq $pritag} @do_feats) {
     my $start = $feature->start();
@@ -383,7 +383,7 @@ foreach my $feature ($seqobj->all_SeqFeatures()) {
     }
   }
 }
-#$emblout->write_seq($seqobj);
+}
 close($ofh);
 }
 # }}}
