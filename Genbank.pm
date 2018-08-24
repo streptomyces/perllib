@@ -1856,31 +1856,36 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       my $product;
       my $id;
       my $gene;
-
-# If old_locus_tag is specified then attempt to get the old_locus_tag
-# failing which, get the locus_tag.
-          if($args{old_locus_tag}) {
-            if($feature->has_tag("old_locus_tag")) {
-              my $lt=join("|", $feature->get_tag_values("old_locus_tag"));
-              $id = $lt;
-            }
-            elsif($feature->has_tag("locus_tag")) {
-              my $lt=join("|", $feature->get_tag_values("locus_tag"));
-              $id = $lt;
-            }
-          }
-          elsif($feature->has_tag("locus_tag")) {
-            my $lt=join("|", $feature->get_tag_values("locus_tag"));
-            $id = $lt;
-          }
+      if(exists $args{tagasid}) {
+        if($feature->has_tag($args{tagasid})) {
+          my @temp = $feature->get_tag_values($args{tagasid});
+          $id = shift(@temp);
+        }
+      }
+      elsif($args{old_locus_tag}) {
+        if($feature->has_tag("old_locus_tag")) {
+          my $lt=join("|", $feature->get_tag_values("old_locus_tag"));
+          $id = $lt;
+        }
+        elsif($feature->has_tag("locus_tag")) {
+          my $lt=join("|", $feature->get_tag_values("locus_tag"));
+          $id = $lt;
+        }
+      }
+      elsif($feature->has_tag("locus_tag")) {
+        my $lt=join("|", $feature->get_tag_values("locus_tag"));
+        $id = $lt;
+      }
 
 # Get product and gene.
-          if($feature->has_tag("product")) {
-            $product=join(" ", $feature->get_tag_values("product"));
-          }
-          if($feature->has_tag("gene")) {
-            $gene=join(" ", $feature->get_tag_values("gene"));
-          }
+      if($feature->has_tag("product")) {
+        $product=join(" ", $feature->get_tag_values("product"));
+      }
+      unless (exists($args{tagasid}) and $args{tagasid} eq "gene") {
+        if($feature->has_tag("gene")) {
+          $gene=join(" ", $feature->get_tag_values("gene"));
+        }
+      }
 
       my $lig = $feature->start() . ":" . $feature->end(); # location in genbank
       $lig .= ":" . $feature->strand();
