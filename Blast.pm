@@ -462,8 +462,9 @@ sub hspHashes {
             hcov => $hcov);
         push(@retlist, {%rethash});
       }
+      push(@retlist, '//');
     }
-    push(@retlist, "\/\/");
+    push(@retlist, '////');
   }
   return(@retlist);
 }
