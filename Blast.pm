@@ -437,6 +437,8 @@ sub hspHashes {
         my $hlen=$hit->length();
         my $frac_id = sprintf("%.3f", $hsp->frac_identical());
         my $frac_conserved = sprintf("%.3f", $hsp->frac_conserved());
+        my $num_id = $hsp->num_identical();
+        my $num_conserved = $hsp->num_conserved();
         my $hdesc=$hit->description();
         $hdesc =~ s/$cA/ /g;
         my $signif=$hsp->significance();
@@ -457,7 +459,8 @@ sub hspHashes {
             qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq, lah => $lah,
             fracid => $frac_id, fracsim => $frac_conserved, qcov => $qcov,
             qstr => $hsp->query_string(), numhsps => $num_hsps,
-            hstr => $hsp->hit_string(), expect => $signif,
+            numid => $num_id, num_id => $num_id, numconserved => $num_conserved,
+            num_conserved => $num_conserved, hstr => $hsp->hit_string(), expect => $signif,
             homolstr => $hsp->homology_string(),
             hcov => $hcov);
         push(@retlist, {%rethash});
