@@ -817,6 +817,7 @@ unless($format) { $format = 'blast'; }
         hlen => $hlen, qdesc => $qdesc, hit => $hit,
         signif => $signif, bit => $bitScore, hdesc => $hdesc,
         qcover => $qcover, hcover => $hcover, hstrand => $strand,
+        qcov => $qcover, hcov => $hcover,
         fracid => $frac_id, numhsps => $num_hsps,
         frac_id => $frac_id, qstart => $qstart, qend => $qend,
         hstart => $hstart, hend => $hend);
