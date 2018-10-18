@@ -8,6 +8,7 @@ use File::Copy;
 use File::Temp qw(tempfile tempdir);
 my $tempdir = qw(/home/sco/volatile);
 my $template="BlastXXXXX";
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 # $XML::SAX::ParserPackage = 'XML::SAX::PurePerl';
 
 our($AUTOLOAD);
@@ -79,89 +80,108 @@ return(@retlist);
 # {{{ mkblastpdb (hash(inlist, outfile, title, format, faaname)) returns(nothing) 
 # writes a blast database with the outfile as basename.
 sub mkblastpdb {
-my $self = shift(@_);
-my %args = @_;
-my @files = @{$args{inlist}};
+  my $self = shift(@_);
+  my %args = @_;
+  my @files = @{$args{inlist}};
 #print(join(" ", @files), "\n");
-unless(ref($args{inlist})) {
-croak qq(A reference to a list of filenames is required.);
-}
-unless($args{outfile}) {
-croak qq(An outfilename is required.);
-}
-my $faaWanted;
-if($args{faaname}) { $faaWanted = $args{faaname}; }
+  unless(ref($args{inlist})) {
+    croak qq(A reference to a list of filenames is required.);
+  }
+  unless($args{outfile}) {
+    croak qq(An outfilename is required.);
+  }
+  my $faaWanted;
+  if($args{faaname}) { $faaWanted = $args{faaname}; }
 
-my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
-my $protCnt = 0;
+  my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+  my $protCnt = 0;
 
-if($args{format}!~m/fasta/i) {
-my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
-my %ids; # Need to check that ids are unique;
-foreach my $infile (@files) {
-my $seqio = Bio::SeqIO->new(-file => $infile);
-while(my $seqobj=$seqio->next_seq()) {
-  foreach my $feature ($seqobj->all_SeqFeatures()) {
-    if($feature->primary_tag() eq 'CDS') {
-      my $annotation;
-      my @temp;
-      my @temp1;
-      my $id;
-      my @tags = $feature->get_all_tags();
-      foreach my $tag (@tags) {
-        if($tag=~m/product|gene|note/i) {
-          push(@temp, $feature->get_tag_values($tag));
+  if($args{format}!~m/fasta/i) {
+    my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    my %ids; # Need to check that ids are unique;
+    foreach my $infile (@files) {
+      my $seqio = Bio::SeqIO->new(-file => $infile);
+      while(my $seqobj=$seqio->next_seq()) {
+        foreach my $feature ($seqobj->all_SeqFeatures()) {
+          if($feature->primary_tag() eq 'CDS') {
+            my $annotation;
+            my @temp;
+            my @temp1;
+            my $id;
+            my @tags = $feature->get_all_tags();
+            foreach my $tag (@tags) {
+              if($tag=~m/product|gene|note/i) {
+                push(@temp, $feature->get_tag_values($tag));
+              }
+              if($tag=~m/locus_tag|systematic_id/) {
+                push(@temp1, $feature->get_tag_values($tag));
+              }
+            }
+            unless(@temp1) {
+              if($feature->has_tag("gene")) {
+                push(@temp1, $feature->get_tag_values("gene"));
+              }
+            }
+            $id = $temp1[0];
+            if($id) { 
+              if(exists($ids{$id})) { $id .= "_1"; }
+              $ids{$id} += 1;
+              $annotation = join(" ", @temp);
+              my $aa_obj = _feat_translate($feature);
+              $aa_obj->display_name($id);
+              $aa_obj->description($annotation);
+              $seqout->write_seq($aa_obj);
+              $protCnt += 1;
+            }
+          }
         }
-        if($tag=~m/locus_tag|systematic_id/) {
-          push(@temp1, $feature->get_tag_values($tag));
-        }
-      }
-      unless(@temp1) {
-        if($feature->has_tag("gene")) {
-          push(@temp1, $feature->get_tag_values("gene"));
-        }
-      }
-      $id = $temp1[0];
-      if($id) { 
-      if(exists($ids{$id})) { $id .= "_1"; }
-      $ids{$id} += 1;
-      $annotation = join(" ", @temp);
-      my $aa_obj = _feat_translate($feature);
-      $aa_obj->display_name($id);
-      $aa_obj->description($annotation);
-      $seqout->write_seq($aa_obj);
-      $protCnt += 1;
       }
     }
+    close($fh);
   }
-}
-}
-close($fh);
-}
 
-else {
-my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
-foreach my $infile (@files) {
-my $seqio = Bio::SeqIO->new(-file => $infile);
-while(my $seqobj=$seqio->next_seq()) {
-      $seqout->write_seq($seqobj);
-      $protCnt += 1;
+  else {
+    my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    foreach my $infile (@files) {
+      my $incomingIsTemp = 0;
+      if($infile =~ m/\.gz$/) {
+        my @temp = split(/\./, $infile);
+        my $temp1 = $temp[-2];
+        unless($temp1) { $temp1 = '.tmp'; }
+        my($infh, $infn)=tempfile($template, DIR => $tempdir, SUFFIX => $temp1);
+        unless(gunzip $infile => $infh, AutoClose => 1) {
+          close($infh); unlink($infn);
+          carp("gunzip failed for $infile $GunzipError\n");
+          next;
+        }
+        $infile = $infn;
+        $incomingIsTemp = 1;
+      }
+      my $seqio = Bio::SeqIO->new(-file => $infile);
+      while(my $seqobj=$seqio->next_seq()) {
+        $seqout->write_seq($seqobj);
+        $protCnt += 1;
+      }
+      if($incomingIsTemp) { unlink($infile); }
     }
+    close($fh);
   }
-close($fh);
-}
 
-if($protCnt) {
-my $mbdbout = qx(/usr/local/bin/makeblastdb -in $fn -dbtype prot -title "$args{title}" -out $args{outfile} -parse_seqids);
-copy($fn, $faaWanted);
-unlink($fn);
-return(1);
-}
-else {
-carp(qq(Protein count zero\n));
-unlink($fn);
-return(0);
-}
+  if($protCnt) {
+    my $xstr = qq(/usr/local/bin/makeblastdb -in $fn -dbtype prot);
+    $xstr .= qq( -title "$args{title}" -out $args{outfile} -parse_seqids);
+    my $mbdbout = qx($xstr);
+    if($faaWanted) {
+      copy($fn, $faaWanted);
+    }
+    unlink($fn);
+    return(1);
+  }
+  else {
+    carp(qq(Protein count zero\n));
+    unlink($fn);
+    return(0);
+  }
 }
 # }}}
 
