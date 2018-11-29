@@ -712,7 +712,8 @@ return(@retlist);
 }
 # }}}
 
-# {{{ topHitMulti (blastOutputFileName, ethresh) returns(list of hash(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
+# {{{ topHitMulti (blastOutputFileName, ethresh)
+# returns(list of hash(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
 sub topHitMulti {
 my $self = shift(@_);
 my $filename=shift(@_);
@@ -727,9 +728,11 @@ if($temp) { $format = $temp; }
 while( my $result = $searchio->next_result() ) {
   unless($result) { return();}
   my $qname=$result->query_name();
+  my $qdesc=$result->query_description();
   my $qlen=$result->query_length();
   while(my $hit = $result->next_hit()) {
   if($hit) {
+    my $num_hsps = $hit->num_hsps();
     my $hname=$hit->name();
     my $hlen=$hit->length();
     my $frac_id = sprintf("%.3f", $hit->frac_identical());
@@ -748,8 +751,9 @@ while( my $result = $searchio->next_result() ) {
     my $cA = chr(01);
     $hdesc=~s/$cA/ /g;
     my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
-                   signif => $signif, bit => $bitScore, hdesc => $hdesc,
+                   signif => $signif, bit => $bitScore, qdesc => $qdesc, hdesc => $hdesc,
                    qcover => $qcover, hcover => $hcover, hstrand => $strand, qstart => $qstart,
+                   qcov => $qcover, hcov => $hcover, numhsps => $num_hsps,
                    qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
                    fracid => $frac_id);
     if($ethresh) {
@@ -1062,6 +1066,77 @@ sub reciblastp {
   }
 }
 # }}}
+
+# {{{ mf_reciblastp (hash(query, refdb, db, biodb, expect)).
+# Returns two hashrefs or one hashref and undef.
+# query is a faa file with a single sequence or a protein seqobj.
+# db is the subject blast database
+# refdb is the reference blast database. i.e. of the organism from which
+#       the query comes.
+# biodb is the Bio::DB::Fasta object from which the hit id can be retrieved.
+# expect is the evalue threshold
+sub mf_reciblastp {
+  my $self = shift(@_);
+  my %args = @_;
+  my $query = $args{query};
+  my $db = $args{db};
+  my $biodb = $args{biodb};
+  my $refdb = $args{refdb};
+  my $evalue = $args{expect};
+  unless ($evalue) { $evalue = 1; }
+  my $outfmt = 0;
+
+# Note the use of -comp_based_stats to 2 in the blastp calls below.
+
+  my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+  close($fh1);
+  if(ref($query)) {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    $seqout->write_seq($query);
+    close($fh);
+    qx($blastbindir/blastp -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+    unlink($fn);
+  }
+  elsif(-e $query and -r $query) {
+    qx($blastbindir/blastp -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+  }
+  my @forward = topHitMulti($self, $fn1, $evalue);
+  unlink($fn1);
+  my @reverse;
+  for my $forward (@forward) {
+    if(ref($forward)) {
+      my %forward = %{$forward};
+      my %reverse;
+      if(%forward) {
+        my $fhname = $forward{hname};
+# carp("Blast.pm: $fhname");
+        my $revquery = $biodb->get_Seq_by_id($fhname);
+        my($fh2, $fn2)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+        my $seqout2 = Bio::SeqIO->new(-fh => $fh2, -format => 'fasta');
+        $seqout2->write_seq($revquery);
+        close($fh2);
+        my($fh3, $fn3)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+        qx($blastbindir/blastp -outfmt $outfmt -query $fn2 -db $refdb -evalue $evalue -out $fn3 -comp_based_stats 2 -seg no);
+        %reverse = tophit($self, $fn3, "blast");
+        if(keys(%reverse)) { push(@reverse, \%reverse); }
+        unlink($fn2);
+        unlink($fn3);
+      }
+    }
+  }
+  if(@forward and @reverse) {
+    return(\@forward, \@reverse);
+  }
+  elsif(@forward) {
+    return(\@forward, []);
+  }
+  else {
+    return([], []);
+  }
+}
+# }}}
+
 
 # {{{ reciblastpn (hash(query, refdb, db, biodb, expect)).
 # Returns two hashrefs or one hashref and undef.
