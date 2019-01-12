@@ -873,9 +873,14 @@ sub seqObj2featuresSQLite {
   }
   
   my $handlite=DBI->connect("DBI:SQLite:dbname=$fn", '', '');
+  eval {
   $handlite->do(qq/create table features (id text, locus_tag text, pritag text,
   start_pos integer, end_pos integer, strand integer,
   product text, olt text)/);
+  };
+  if($@) {
+    carp("Creation of features table failed. Continuing\n");
+  }
 
   my @retlist;
   my $featCnt = 0;
