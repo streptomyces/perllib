@@ -305,12 +305,13 @@ sub blastp {
 }
 # }}}
 
-# {{{ tblastn (hash(query, db, expect, outfmt, evalue, task, maxtargets)).
+# {{{ tblastn (hash(query, outfh, db, expect, outfmt, evalue, task, maxtargets)).
 # Returns a filename which you must unlink.
 sub tblastn {
  my $self = shift(@_);
  my %args = @_;
  my $query = $args{query};
+ my $ofh = $args{outfh};
  my $db = $args{db};
  my $evalue = $args{expect};
  unless ($evalue) { $evalue = $args{evalue} }
@@ -325,19 +326,29 @@ sub tblastn {
  }
 
 
+ my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
  if(ref($query)) {
    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.fna');
    my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
    $seqout->write_seq($query);
    close($fh);
-   my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
    qx/tblastn -outfmt $outfmt $ntarg -query $fn -db $db -evalue $evalue -out $fn1 -seg no/;
    unlink($fn);
-   return($fn1);
  }
  elsif(-e $query and -r $query) {
-   my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
    qx/tblastn -outfmt $outfmt $ntarg -query $query -db $db -evalue $evalue -out $fn1 -seg no/;
+ }
+ if($ofh) {
+  open(BL, "<$fn1");
+  while(<BL>) {
+    print($ofh $_);
+  }
+  close(BL);
+  close($ofh);
+  unlink($fn1);
+  return(1);
+ }
+ else {
    return($fn1);
  }
 
@@ -797,6 +808,7 @@ unless($format) { $format = 'blast'; }
     my $hlen=$hit->length();
     my $num_hsps = $hit->num_hsps();
     my $frac_id = sprintf("%.3f", $hit->frac_identical());
+    my $frac_cons = sprintf("%.3f", $hit->frac_conserved());
     my $hdesc=$hit->description();
     my $signif=$hit->significance();
     my $laq=$hit->length_aln('query');
@@ -821,8 +833,8 @@ unless($format) { $format = 'blast'; }
         hlen => $hlen, qdesc => $qdesc, hit => $hit,
         signif => $signif, bit => $bitScore, hdesc => $hdesc,
         qcover => $qcover, hcover => $hcover, hstrand => $strand,
-        qcov => $qcover, hcov => $hcover,
-        fracid => $frac_id, numhsps => $num_hsps,
+        qcov => $qcover, hcov => $hcover, fraccons => $frac_cons,
+        fracid => $frac_id, frac_cons => $frac_cons, numhsps => $num_hsps,
         frac_id => $frac_id, qstart => $qstart, qend => $qend,
         hstart => $hstart, hend => $hend);
     return(%rethash);
