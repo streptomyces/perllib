@@ -1810,11 +1810,11 @@ sub genbank2faa {
 my $self = shift(@_);
 my %args = @_;
 
-my $orgnInDesc = 1;
+my $orgnInDesc = 0;
 if(exists($args{orgname})) {
 $orgnInDesc = $args{orgname};
 }
-my $seqidInDesc = 1;
+my $seqidInDesc = 0;
 if(exists($args{seqid})) {
 $seqidInDesc = $args{seqid};
 }
