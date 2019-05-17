@@ -444,7 +444,8 @@ unless($filename and $idThresh) {
 }
 # }}}
 
-# {{{ hspHashes (blastOutputFileName, format) returns(list of hashes(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
+# {{{ hspHashes (blastOutputFileName, format)
+# returns(list of hashes(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
 sub hspHashes {
   my $self = shift(@_);
   my $filename=shift(@_);
@@ -925,7 +926,7 @@ my $filename=shift(@_);
 # }}}
 
 # {{{ sub rpsblast (%(file or seqobj, db, expect)) returns(Filename)
-# Callee has to unlink the returned filename.
+# Caller has to unlink the returned filename.
 sub rpsblast {
   my $self = shift(@_);
   my %args = @_;

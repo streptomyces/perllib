@@ -5,7 +5,7 @@ our @EXPORT_OK = qw(
 tablist linelist tablistE linelistE tabhash tabhashE tabvals
 tablistV tablistVE linelistV linelistVE tablistH linelistH
 tablistER tablistVER linelistER linelistVER tabhashER tabhashVER
-ymd ddmyhms csvsplit file2hash linelistserial
+ymd ddmyhms csvsplit file2hash linelistserial csvlist
 );
 # use Sco::Common qw(tablist linelist tablistE linelistE tabhash tabhashE tabvals
 #                    tablistV tablistVE linelistV linelistVE);
@@ -220,6 +220,22 @@ sub csvsplit {
   }
   if($tok) { push(@tok, $tok); }
 return(@tok);
+}
+# }}}
+
+# {{{ sub csvlist
+sub csvlist {
+  my @in = @_;
+  my @out;
+  for my $in (@in) {
+    if($in =~ m/[^+\-.0-9e]/i) {
+      push(@out, qq("$in"));
+    }
+    else {
+      push(@out, $in);
+    }
+  }
+  print(join(",", @out), "\n");
 }
 # }}}
 
