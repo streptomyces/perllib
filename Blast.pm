@@ -817,6 +817,7 @@ unless($format) { $format = 'blast'; }
     my $lah=$hit->length_aln('hit');
     my $hcover = sprintf("%.3f", $lah/$hlen);
     my $qstart = $hit->start('query');
+    my ($qgaps, $hgaps) = $hit->gaps();
     my $qend = $hit->end('query');
     my $hstart = $hit->start('hit');
     my $hend = $hit->end('hit');
@@ -832,12 +833,12 @@ unless($format) { $format = 'blast'; }
     }
     my %rethash = (qname => $qname, hname => $hname, qlen => $qlen,
         hlen => $hlen, qdesc => $qdesc, hit => $hit,
-        signif => $signif, bit => $bitScore, hdesc => $hdesc,
+        signif => $signif, evalue => $signif, bit => $bitScore, hdesc => $hdesc,
         qcover => $qcover, hcover => $hcover, hstrand => $strand,
         qcov => $qcover, hcov => $hcover, fraccons => $frac_cons,
         fracid => $frac_id, frac_cons => $frac_cons, numhsps => $num_hsps,
         frac_id => $frac_id, qstart => $qstart, qend => $qend,
-        hstart => $hstart, hend => $hend);
+        hstart => $hstart, hend => $hend, qgaps => $qgaps, hgaps => $hgaps);
     return(%rethash);
 #    return($qname, $hname, $signif, $qcover, $hcover, $frac_id, $hlen);
   }
@@ -1014,7 +1015,7 @@ return($retstr);
 }
 # }}}
 
-# {{{ reciblastp (hash(query, refdb, db, biodb, expect)).
+# {{{ reciblastp (hash(query, refdb, db, biodb, expect, comp_based_stats)).
 # Returns two hashrefs or one hashref and undef.
 # query is a faa file with a single sequence or a protein seqobj.
 # db is the subject blast database
@@ -1031,6 +1032,10 @@ sub reciblastp {
   my $refdb = $args{refdb};
   my $evalue = $args{expect};
   unless ($evalue) { $evalue = 1; }
+  my $comp_based_stats = 2;
+  if($args{comp_based_stats}) {
+    $comp_based_stats = $args{comp_based_stats};
+  }
   my $outfmt = 0;
 
 # Note the use of -comp_based_stats to 2 in the blastp calls below.
@@ -1042,11 +1047,15 @@ sub reciblastp {
     my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
     $seqout->write_seq($query);
     close($fh);
-    qx($blastbindir/blastp -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    qx($xstr);
     unlink($fn);
   }
   elsif(-e $query and -r $query) {
-    qx($blastbindir/blastp -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    qx($xstr);
   }
   my %forward = tophit($self, $fn1, "blast");
   unlink($fn1);
@@ -1149,7 +1158,6 @@ sub mf_reciblastp {
   }
 }
 # }}}
-
 
 # {{{ reciblastpn (hash(query, refdb, db, biodb, expect)).
 # Returns two hashrefs or one hashref and undef.
