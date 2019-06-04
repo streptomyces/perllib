@@ -10,7 +10,7 @@ use lib qw(/home/sco /home/sco/perllib);
 use parent qw(Sco::Fasta Sco::Global);
 # use Scoglobal;
 use File::Temp qw(tempfile tempdir);
-my $tempdir = qw(/home/sco/volatile);
+my $tempdir = qw(/mnt/volatile);
 my $template="genbankpmXXXXX";
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 
@@ -1842,7 +1842,18 @@ foreach my $temp (@gbkNames)  {
   if(-z $filename) {
     carp("Zero size of $filename\n");
   }
-my $seqio = Bio::SeqIO->new(-file => $filename);
+    my $incomingIsTemp = 0;
+    if($filename =~ m/\.gz$/) {
+      my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+      unless(gunzip $filename => $gbfh, AutoClose => 1) {
+        close($gbfh); unlink($gbfn);
+# next;
+        die "gunzip failed: $filename $GunzipError\n";
+      }
+      $filename = $gbfn;
+      $incomingIsTemp = 1;
+    }
+my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
 my ($gbkBn, $directory, $ext) = fileparse($filename, qr/\.[^.]*/);
 while(my $seqobj = $seqio->next_seq()) {
   my $seqid = $seqobj->display_id();
@@ -1888,7 +1899,8 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       }
       unless (exists($args{tagasid}) and $args{tagasid} eq "gene") {
         if($feature->has_tag("gene")) {
-          $gene=join(" ", $feature->get_tag_values("gene"));
+          my @temp = $feature->get_tag_values("gene");
+          $gene = $temp[0];
         }
       }
 
@@ -1896,7 +1908,12 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       $lig .= ":" . $feature->strand();
       # print(STDERR "\$lig: $lig\n");
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
-      unless($id) { $id = $gbkBn . "_" . sprintf("%05d", $cdsCnt); }
+      unless($id) {
+        if($gene) { $id = $gene; }
+        else {
+          $id = $gbkBn . "_" . sprintf("%05d", $cdsCnt);
+        }
+      }
       my $aaobj = _feat_translate($feature);
       if($aaobj) {
       $aaobj->display_name($id);
@@ -1937,6 +1954,9 @@ if($args{binomial}) { $binomial = $args{binomial}; }
     }
   }
 }
+  if($incomingIsTemp) {
+    unlink($filename);
+  }
 }
 close($ofh);
 if($tableWanted) {
