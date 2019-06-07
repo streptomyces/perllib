@@ -5,6 +5,7 @@ use Bio::Seq;
 use Carp;
 use DBI;
 use File::Basename;
+use File::Spec;
 our $AUTOLOAD;
 use lib qw(/home/sco /home/sco/perllib);
 use parent qw(Sco::Fasta Sco::Global);
@@ -19,7 +20,7 @@ use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 my $soukDataDir = '/home/nouser/souk/data';
 my $gbkSqlite = qq(/home/sco/seq/nt/genbank_ftp/genbank.qlt);
 my $draftsSqlite = qq(/home/sco/seq/nt/draft_ftp/drafts.sqlite);
-my $gbkDir = qq(/home/sco/seq/nt/genbank_ftp);
+my $gbkDir = qq(/mnt/isilon/ncbigenomes/refrepgbk);
 my $draftDir = qq(/home/sco/seq/nt/draft_ftp);
 my $blastbindir = qq(/usr/local/bin);
 
@@ -158,17 +159,35 @@ return(@retList);
 sub gbkfile2fna {
   my $self = shift(@_);
   my %args = @_;
+  if($args{localname} =~ m/\w+/) {
+    $args{file} = $args{localname};
+  }
+  
   my $filename;
-  if($args{localname}) {
+  if (-e $args{file}) {
     $filename = $args{file};
   }
-  else {
-  $filename = $gbkDir . '/' . $args{file};
+  elsif (-e File::Spec->catfile($gbkDir, $args{file})) {
+    $filename = File::Spec->catfile($gbkDir, $args{file});
   }
   if(not -s $filename) {
     linelistE("$filename does not exist or is zero in size");
     return(0);
   }
+  
+  my $incomingIsTemp = 0;
+  if($filename =~ m/\.gz$/) {
+  my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+  unless(gunzip $filename => $gbfh, AutoClose => 1) {
+    close($gbfh); unlink($gbfn);
+    # next;
+    die "gunzip failed: $filename $GunzipError\n";
+  }
+  $filename = $gbfn;
+  $incomingIsTemp = 1;
+  }
+  
+  
   my $seqio = Bio::SeqIO->new(-file => $filename);
   my $seqout = Bio::SeqIO->new(-file => ">$args{outfilename}", -format => 'fasta');
   my $seqobj = $seqio->next_seq();
@@ -177,6 +196,7 @@ sub gbkfile2fna {
     $seqobj->display_name($args{name});
   }
   $seqout->write_seq($seqobj);
+  if($incomingIsTemp) { unlink($filename); }
   return(1);
 }
 # }}}
@@ -2955,5 +2975,86 @@ sub subgenbank {
 
 return(1);
 
+# }}}
+
+# {{{ sub genbank_lt_prot %(file, locus_tag, orgname)
+# Returns Bio::Seq (protein) object.
+# orgname defaults to 1. Boolean Organism name in description.
+sub genbank_lt_prot {
+  my $self = shift(@_);
+  my %args = @_;
+
+  my $orgnInDesc = 1;
+  if(exists($args{orgname})) {
+    $orgnInDesc = $args{orgname};
+  }
+
+  my $cdsCnt = 0;
+  my $filename = $args{file};
+  if(-e $filename) {;}
+  elsif(-e File::Spec->catfile($gbkDir, $filename)) {
+    $filename = File::Spec->catfile($gbkDir, $filename);
+  }
+  else { carp("$filename not found;")}
+  if(-s $filename and -r $filename) {;}
+  else {
+    carp("$filename not readable or zero in size.");
+  }
+  my $incomingIsTemp = 0;
+  if($filename =~ m/\.gz$/) {
+    my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+    unless(gunzip $filename => $gbfh, AutoClose => 1) {
+      close($gbfh); unlink($gbfn);
+# next;
+      carp "gunzip failed: $filename $GunzipError\n";
+    }
+    $filename = $gbfn;
+    $incomingIsTemp = 1;
+  }
+  my $retobj;
+  my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
+  SEQ: while(my $seqobj = $seqio->next_seq()) {
+    my $seqid = $seqobj->display_id();
+    my $species = $seqobj->species();
+    my $binomial;
+    if($species) {
+      $binomial = $species->binomial('FULL');
+    }
+    my @temp = $seqobj->all_SeqFeatures();
+    FEAT: for my $feature ($seqobj->all_SeqFeatures()) {
+      if($feature->primary_tag() eq 'CDS') {
+        $cdsCnt += 1;
+        my $product;
+        my $id;
+        my $gene;
+        my @lt;
+        if($feature->has_tag("locus_tag")) {
+          push(@lt, $feature->get_tag_values("locus_tag"));
+        }
+        if($feature->has_tag("old_locus_tag")) {
+          push(@lt, $feature->get_tag_values("old_locus_tag"));
+        }
+        if($feature->has_tag("gene")) {
+          push(@lt, $feature->get_tag_values("gene"));
+        }
+        if(grep {$_ eq $args{locus_tag}} @lt) {
+          my $aaobj = _feat_translate($feature);
+          $aaobj->display_id($args{locus_tag});
+          $aaobj->description($binomial);
+          $retobj = $aaobj;
+          last(SEQ);
+        }
+      }
+    }
+  }
+  if($incomingIsTemp) {
+    unlink($filename);
+  }
+  return($retobj);
+}
+# }}}
+
+
 
 __END__
+
