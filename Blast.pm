@@ -248,7 +248,7 @@ sub blastpxml {
 }
 # }}}
 
-# {{{ blastp (hash(query, db, expect, outfh, threads, naln, ndesc, outfmt)).
+# {{{ blastp (hash(query, db, expect, outfh, threads, naln, ndesc, outfmt, comp_based_stats)).
 sub blastp {
   my $self = shift(@_);
   my %args = @_;
@@ -264,8 +264,10 @@ sub blastp {
   if($args{ndesc}) { $ndesc = $args{ndesc}; }
   my $naln = 500;
   if($args{naln}) { $naln = $args{naln}; }
-  my $n_threads = 4;
+  my $n_threads = 1;
   if($args{threads}) { $n_threads = $args{threads}; }
+  my $cbs = 2;
+  if($args{comp_based_stats}) { $cbs = $args{comp_based_stats}; }
   # print(STDERR "In blastp with $query\n");
 
 # Thu 25 Jul 2013
@@ -284,12 +286,12 @@ sub blastp {
     my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
     $seqout->write_seq($query);
     close($fh);
-    qx($blastbindir/blastp -num_descriptions $ndesc -num_threads $n_threads -num_alignments $naln -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+    qx($blastbindir/blastp -num_descriptions $ndesc -num_threads $n_threads -num_alignments $naln -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1 -comp_based_stats $cbs -seg no);
     unlink($fn);
   }
   elsif(-e $query and -r $query) {
     # print(STDERR "Doing file $query\n");
-    qx($blastbindir/blastp -num_descriptions $ndesc -num_alignments $naln  -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats 2 -seg no);
+    qx($blastbindir/blastp -num_descriptions $ndesc -num_alignments $naln  -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats $cbs -seg no);
   }
   else {
     print(STDERR "Something wrong with the query file $query\n");
@@ -769,7 +771,7 @@ while( my $result = $searchio->next_result() ) {
                    qstart => $qstart, qdesc => $qdesc,
                    qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
                    fracid => $frac_id, numhsps => $num_hsps);
-    push(@retlist, { %rethash });
+    push(@retlist, \%rethash);
 #    return($qname, $hname, $signif, $qcover, $hcover, $frac_id, $hlen);
 }
 push(@retlist, "\/\/");
