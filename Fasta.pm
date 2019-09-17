@@ -339,6 +339,51 @@ return(bldbname => $args{bldbname}, infile => $args{file}, faafile => $faafn);
 }
 # }}}
 
+# {{{ sub fasta2blastnDB %(file, bldbname, title, fnafile)
+# returns %(bldbname, infile, fnafile);
+sub fasta2blastnDB {
+my $self = shift(@_);
+my %args = @_;
+#_dumphash(%args);
+
+  my $filename = $args{file};
+  my $incomingIsTemp = 0;
+
+  my($fnafh, $fnafn);
+  if($filename =~ m/\.gz$/) {
+    if($args{fnafile}) {
+      $fnafn = $args{fnafile};
+      open($fnafh, ">", $fnafn);
+    }
+    else {
+      ($fnafh, $fnafn)=tempfile($template, DIR => $tempdir, SUFFIX => '.fna');
+    }
+
+    unless(gunzip $filename => $fnafh, AutoClose => 1) {
+      close($fnafh); unlink($fnafn);
+      die "gunzip failed: $filename $GunzipError\n";
+    }
+    $filename = $fnafn;
+    $incomingIsTemp = 1;
+  }
+
+my $mkbldbbin = File::Spec->catfile($blastbindir, "makeblastdb");
+my $xstr = qq($mkbldbbin -in $filename -title "$args{title}" -dbtype nucl -out $args{bldbname});
+qx($xstr);
+if($?) {
+print(STDERR $xstr, "\n");
+croak($xstr);
+}
+if($incomingIsTemp) {
+  unless($args{fnafile}) {
+    unlink($filename);
+  }
+}
+return(bldbname => $args{bldbname}, infile => $args{file}, fnafile => $fnafn);
+}
+# }}}
+
+
 # {{{ sub selectEntries. hash(infile, ofh, \@ids)
 sub selectEntries {
 my $self = shift(@_);

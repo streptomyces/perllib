@@ -435,15 +435,22 @@ print $ofh <<"HEAD";
 GeneID\tChr\tStart\tEnd\tStrand\tPriTag
 HEAD
 
-my $seqobj=$seqio->next_seq();
+
+my $cycle = 0;
+while(my $seqobj=$seqio->next_seq()) {
 my $seqlen = $seqobj->length();
+my $mol;
+if(ref($molecule)) {
+$mol = $molecule->[$cycle];
+}
+else { $mol = $molecule; }
 my $start = 1;
 my $end = $start + ($by - 1);
 my $mid = int(($start + $end)/2);
 
 while($end <= $seqlen) {
-  my $id = $pre . "_" .  $mid;
-  print($ofh "$id\t$molecule\t$start\t$end\t+\tsection\n");
+  my $id = $mol . "_" .  $mid;
+  print($ofh "$id\t$mol\t$start\t$end\t+\tsection\n");
   $start += $by;
   $end = $start + ($by - 1);
   $mid = int(($start + $end)/2);
@@ -451,9 +458,13 @@ while($end <= $seqlen) {
 if($start < $seqlen) {
   $end = $seqlen;
   $mid = int(($start + $end)/2);
-  my $id = $pre . "_" .  $mid;
-  print($ofh "$id\t$molecule\t$start\t$end\t+\tsection\n");
+  my $id = $mol . "_" .  $mid;
+  print($ofh "$id\t$mol\t$start\t$end\t+\tsection\n");
 }
+$cycle += 1;
+}
+
+
 close($ofh);
 }
 # }}}
@@ -2956,7 +2967,9 @@ sub subgenbank {
     my @temp = $ft->location()->each_Location();
     my $nloc = scalar(@temp);
     if($nloc == 1 and $ft->start() >= $start and $ft->end() <= $end) {
+      unless($ft->primary_tag() =~ m/domain|motif/i) {
       push(@oft, $ft);
+      }
     }
   }
 
@@ -2972,9 +2985,6 @@ sub subgenbank {
   return($outobj);
 
 }
-
-return(1);
-
 # }}}
 
 # {{{ sub genbank_lt_prot %(file, locus_tag, orgname)
@@ -3055,6 +3065,9 @@ sub genbank_lt_prot {
 # }}}
 
 
+return(1);
 
 __END__
+
+perldoc Bio::PrimarySeqI
 

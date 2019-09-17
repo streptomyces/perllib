@@ -5,7 +5,7 @@ our @EXPORT_OK = qw(
 tablist linelist tablistE linelistE tabhash tabhashE tabvals
 tablistV tablistVE linelistV linelistVE tablistH linelistH
 tablistER tablistVER linelistER linelistVER tabhashER tabhashVER
-ymd ddmyhms csvsplit file2hash linelistserial csvlist
+ymd ddmyhms csvsplit file2hash linelistserial csvlist inlist
 );
 # use Sco::Common qw(tablist linelist tablistE linelistE tabhash tabhashE tabvals
 #                    tablistV tablistVE linelistV linelistVE);
@@ -263,6 +263,25 @@ sub file2hash {
 }
 # }}}
 
+# {{{ sub inlist
+sub inlist {
+  my %in = @_;
+  my $lr = $in{lr};
+  my $el = $in{el};
+  my $numeric = $in{numeric};
+  if($numeric) {
+    if(grep {$el == $_} @{$lr}) {
+      return(1)
+    }
+  }
+  else {
+    if(grep {$el eq $_} @{$lr}) {
+      return(1)
+    }
+  }
+  return(0);
+}
+# }}}
 
 return(1);
 

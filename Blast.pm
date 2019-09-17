@@ -491,12 +491,12 @@ sub hspHashes {
             signif => $signif, bit => $bitScore, qdesc => $qdesc, hdesc => $hdesc,
             hstrand => $strand, qstart => $qstart, hframe => $hframe,
             qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq, lah => $lah,
-            fracid => $frac_id, fracsim => $frac_conserved, qcov => $qcov,
+            fracid => $frac_id, fracsim => $frac_conserved, qcov => $qcov, qcover => $qcov,
             qstr => $hsp->query_string(), numhsps => $num_hsps,
             numid => $num_id, num_id => $num_id, numconserved => $num_conserved,
             num_conserved => $num_conserved, hstr => $hsp->hit_string(), expect => $signif,
             homolstr => $hsp->homology_string(),
-            hcov => $hcov);
+            hcov => $hcov, hcover => $hcov);
         push(@retlist, {%rethash});
       }
       push(@retlist, '//');
@@ -608,6 +608,8 @@ while( my $result = $searchio->next_result() ) {
     my $qend = $hsp->end('query');
     my $hstart = $hsp->start('hit');
     my $hend = $hsp->end('hit');
+    my $qgaps = $hsp->gaps("query");
+    my $hgaps = $hsp->gaps("hit");
     my $hframe = $hsp->frame('hit');
     my $bitScore = $hsp->bits();
     my $strand = $hsp->strand('hit');
@@ -615,7 +617,8 @@ while( my $result = $searchio->next_result() ) {
                    signif => $signif, bit => $bitScore, hdesc => $hdesc,
                    hstrand => $strand, qstart => $qstart, hframe => $hframe,
                    qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
-                   fracid => $frac_id, qcov => $qcov, hcov => $hcov, numhsps => $num_hsps);
+                   fracid => $frac_id, qcov => $qcov, hcov => $hcov, numhsps => $num_hsps,
+                   qgaps => $qgaps, hgaps => $hgaps, hcover => $hcov, qcover => $qcov);
     push(@retlist, {%rethash});
 }
   }
@@ -767,10 +770,13 @@ while( my $result = $searchio->next_result() ) {
     my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
                    signif => $signif, bit => $bitScore, hdesc => $hdesc,
                    qcover => $qcover, hcover => $hcover, hstrand => $strand,
-                   qcov => $qcover, hcov => $hcover,
-                   qstart => $qstart, qdesc => $qdesc,
+                   qcov => $qcover, hcov => $hcover, evalue => $signif,
+                   qstart => $qstart, qdesc => $qdesc, expect => $signif,
                    qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
                    fracid => $frac_id, numhsps => $num_hsps);
+    if($hit->algorithm() =~ m/blastx|tblast/i) {
+      $rethash{frame} = $hit->frame();
+    }
     push(@retlist, \%rethash);
 #    return($qname, $hname, $signif, $qcover, $hcover, $frac_id, $hlen);
 }
@@ -1113,8 +1119,9 @@ sub reciblastp {
     $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);
   }
-# sub topHSPtopHit {
+# topHSPtopHit
   my %forward = topHSPtopHit($self, $fn1, "blast");
+  my @forwardhits = topHSPs($self, $fn1, "blast");
   unlink($fn1);
 
   my %reverse;
@@ -1137,10 +1144,10 @@ sub reciblastp {
   else { return(); }
 
   if(%forward and %reverse) {
-  return(\%forward, \%reverse);
+  return(\%forward, \%reverse, \@forwardhits);
   }
   elsif(%forward) {
-    return(\%forward, undef);
+    return(\%forward, undef, \@forwardhits);
   }
   else {
     return();
