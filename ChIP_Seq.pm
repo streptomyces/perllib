@@ -39,6 +39,47 @@ return(1);
 
 ### more subs here ###
 
+sub lir {
+  my $self = shift(@_);
+  my %args = @_;
+  my $dbh = $args{dbh};
+  my $left = $args{left};
+  my $right = $args{right};
+  my $pritag = $args{pritag};
+  my $qstr1 = qq/select max(end_pos) from features where end_pos < $left/;
+  $qstr1 .= qq/ and pritag = '$pritag'/;
+  my ($lpos) = $dbh->selectrow_array($qstr1);
+  my $qstr2 = qq/select * from features where end_pos == $lpos/;
+  my $stmt = $dbh->prepare($qstr2);
+  $stmt->execute();
+  my $left_hr = $stmt->fetchrow_hashref();
+  
+  my $qstr3 = qq/select min(start_pos) from features where start_pos > $right/;
+  $qstr3 .= qq/ and pritag = '$pritag'/;
+  my ($rpos) = $dbh->selectrow_array($qstr3);
+  my $qstr4 = qq/select * from features where start_pos == $rpos/;
+  my $stmtt = $dbh->prepare($qstr4);
+  $stmtt->execute();
+  my $right_hr = $stmtt->fetchrow_hashref();
+
+  my $qstr5 = qq/select start_pos, end_pos from features/;
+  $qstr5 .= qq/ where (start_pos <= $right and end_pos >= $right) /;
+  $qstr5 .= qq/ or (start_pos <= $left and end_pos >= $left) /;
+  $qstr5 .= qq/ and pritag = '$pritag'/;
+  # carp($qstr5);
+  # print(STDERR $qstr5);
+  ($rpos, $lpos) = $dbh->selectrow_array($qstr5);
+  my $in_hr;
+  if($rpos and $lpos) {
+  my $qstr6 = qq/select * from features where start_pos == $rpos and end_pos == $lpos/;
+  my $stmttt = $dbh->prepare($qstr6);
+  $stmttt->execute();
+  $in_hr = $stmttt->fetchrow_hashref();
+  }
+  return($left_hr, $in_hr, $right_hr);
+}
+
+
 # {{{ featHash (featFile) returns(%annos)
 sub featHash {
 my $self=shift(@_);
@@ -98,3 +139,4 @@ return('something'); # change this
 
 
 return(1);
+
