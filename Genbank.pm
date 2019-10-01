@@ -1504,7 +1504,7 @@ my $seqio = Bio::SeqIO->new(-file => $filename);
 # linelistE($dispname);
 my $entCnt = 1;
 while(my $seqobj = $seqio->next_seq()) {
-$seqobj->display_id($dispname . "_" . $entCnt);
+$seqobj->display_name($dispname . "_" . $entCnt);
 $seqout->write_seq($seqobj);
 $entCnt += 1;
 }
@@ -1887,7 +1887,7 @@ foreach my $temp (@gbkNames)  {
 my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
 my ($gbkBn, $directory, $ext) = fileparse($filename, qr/\.[^.]*/);
 while(my $seqobj = $seqio->next_seq()) {
-  my $seqid = $seqobj->display_id();
+  my $seqid = $seqobj->display_name();
 my $species = $seqobj->species();
 my $binomial;
 if($species) {
@@ -2098,7 +2098,7 @@ sub genbank2protfna {
     my $seqio = Bio::SeqIO->new(-file => $filename);
     my ($gbkBn, $directory, $ext) = fileparse($filename, qr/\.[^.]*/);
     while(my $seqobj = $seqio->next_seq()) {
-      my $seqid = $seqobj->display_id();
+      my $seqid = $seqobj->display_name();
       my $species = $seqobj->species();
       my $binomial;
       if($species) {
@@ -2278,16 +2278,15 @@ sub upstreamOfLocusTag {
           my $start = $feature->start();
           my $end = $feature->end();
           my $strand = $feature->strand();
-          my $subseq;
-          if($strand == 1 ) {
-            $subseq = $seqobj->trunc($start-$wantLen, $start-1);
+          my $subseq = $seqobj->subseq($start-$wantLen, $start-1);
+          my $subobj = Bio::Seq->new(-seq => $subseq);
+          if($strand == -1 ) {
+            my $revobj = $subobj->revcom();
+            $subobj = $revobj;
           }
-          elsif($strand == -1 ) {
-            $subseq = $seqobj->trunc($end+1, $end+$wantLen)->revcom();
-          }
-          $subseq->display_name("$locusTag");
-          $subseq->description("$wantLen upstream nucleotides");
-          return($subseq);
+          $subobj->display_name("$locusTag");
+          $subobj->description("$wantLen upstream nucleotides");
+          return($subobj);
         }
       }
     }
@@ -2775,7 +2774,7 @@ sub subseq {
   $retobj = $tempobj->revcom();
   }
   else { $retobj = $tempobj; }
-  $retobj->display_id("subsequence");
+  $retobj->display_name("subsequence");
   return($retobj);
 }
 # }}}
@@ -2879,7 +2878,7 @@ foreach my $temp (@gbkNames)  {
 my $seqio = Bio::SeqIO->new(-file => $filename);
 my ($gbkBn, $directory, $ext) = fileparse($filename, qr/\.[^.]*/);
 while(my $seqobj = $seqio->next_seq()) {
-  my $seqid = $seqobj->display_id();
+  my $seqid = $seqobj->display_name();
 my $species = $seqobj->species();
 my $binomial;
 if($species) {
@@ -3024,7 +3023,7 @@ sub genbank_lt_prot {
   my $retobj;
   my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
   SEQ: while(my $seqobj = $seqio->next_seq()) {
-    my $seqid = $seqobj->display_id();
+    my $seqid = $seqobj->display_name();
     my $species = $seqobj->species();
     my $binomial;
     if($species) {
@@ -3049,7 +3048,7 @@ sub genbank_lt_prot {
         }
         if(grep {$_ eq $args{locus_tag}} @lt) {
           my $aaobj = _feat_translate($feature);
-          $aaobj->display_id($args{locus_tag});
+          $aaobj->display_name($args{locus_tag});
           $aaobj->description($binomial);
           $retobj = $aaobj;
           last(SEQ);
