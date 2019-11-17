@@ -24,6 +24,21 @@ sub new {
 
 ### more subs go below ###
 
+# {{{ seqfileFromBlastDB (blastdb => blastdb, id => seqid, ofh => ofh);
+sub seqfileFromBlastDB {
+  my $self = shift(@_);
+  my %args = @_;
+  my $xstr = qq(/usr/local/bin/blastdbcmd -db $args{blastdb} -entry $args{id} -outfmt "%s");
+  my $qseq = qx($xstr);
+  my $qobj = Bio::Seq->new(-seq => $qseq);
+  $qobj->display_id($args{id});
+  my $seqout = Bio::SeqIO->new(-fh => $args{ofh}, -format => 'fasta');
+  $seqout->write_seq($qobj);
+  close($args{ofh});
+  return(1);
+}
+# }}}
+
 # {{{ seqobjFromBlastDB (blastdb => blastdb, id => seqid);
 sub seqobjFromBlastDB {
   my $self = shift(@_);
@@ -1141,6 +1156,14 @@ sub reciblastp {
     my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1);
     $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);
+  }
+  else {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    $self->seqfileFromBlastDB(blastdb => $refdb, id => $query, ofh => $fh);
+    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    qx($xstr);
+    unlink($fn);
   }
 # topHSPtopHit
   my %forward;

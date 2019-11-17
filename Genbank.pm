@@ -14,7 +14,8 @@ use File::Temp qw(tempfile tempdir);
 my $tempdir = qw(/mnt/volatile);
 my $template="genbankpmXXXXX";
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
-
+use Digest::SHA1  qw(sha1 sha1_hex sha1_base64);
+use File::Copy;
 # our @ISA = qw(Scoglobal);
 
 my $soukDataDir = '/home/nouser/souk/data';
@@ -1552,7 +1553,9 @@ my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
 my @gbkNames = @{$args{files}};
 
 my $cdsCnt = 0;
-  my $contig_serial = 0;
+my $contig_serial = 0;
+
+# {{{ foreach my $temp (@gbkNames)
 foreach my $temp (@gbkNames)  {
   my $draftName = $draftDir . '/' . $temp;
   my $finName = $gbkDir . '/' . $temp;
@@ -1626,7 +1629,13 @@ foreach my $temp (@gbkNames)  {
 #$emblout->write_seq($seqobj);
 if($incomingIsTemp) { unlink($filename); }
 }
-close($fh);
+# }}}
+
+close($fh); # handle to fasta file $fn.
+my $dedupfn = _dedup_fasta($fn) or croak("Something");
+
+move($dedupfn, $fn);
+
 if($cdsCnt) {
   my $runbin = $blastbindir ."/makeblastdb";
 qx($runbin -in $fn -title "$args{title}" -dbtype prot -out $args{name} -parse_seqids);
@@ -1648,6 +1657,58 @@ else {
 }
 }
 # }}}
+
+# {{{ sub _dedup_fasta
+sub _dedup_fasta {
+  my $ifn = shift(@_);
+  my %prh;
+  my $seqio = Bio::SeqIO->new(-file => $ifn);
+  while(my $seqobj = $seqio->next_seq()) {
+    my $id = $seqobj->display_id();
+    my $seq = $seqobj->seq();
+    my $shahex = sha1_hex($seq);
+    if(exists($prh{$shahex})) {
+      unless(grep {$_ eq $id} @{$prh{$shahex}}) {
+        push(@{$prh{$shahex}}, $id);
+      }
+    }
+    else {
+      $prh{$shahex} = [$seq, $id];
+    }
+  }
+  my @probj;
+  my %idone;
+  for my $shahex (keys %prh) {
+    my @val = @{$prh{$shahex}};
+    my $seq = shift(@val);
+    my $id = join("", @val);
+    my $probj = Bio::Seq->new(-seq => $seq);
+    if(exists($idone{$id})) {
+      $idone{$id} += 1;
+      my @temp = split("", $id);
+      my @temp1;
+      for my $temp (@temp) {
+        push(@temp1, $temp . "_" . $idone{$id});
+      }
+      $id = join("", @temp1);
+    }
+    else { $idone{$id} = 0; }
+    $probj->display_id($id);
+    push(@probj, $probj);
+  }
+  my @sorted = sort {
+    $a->display_id() cmp $b->display_id();
+  } @probj;
+  
+  my ($tfh, $tfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+  my $seqout = Bio::SeqIO->new(-fh => $tfh, -format => 'fasta');
+  for my $probj (@sorted) {
+    $seqout->write_seq($probj);
+  }
+  close($tfh);
+  return($tfn);
+}
+# }}} 
 
 # {{{ sub filenames2blastnDB %([files], name, title) returns %(name, files);
 sub filenames2blastnDB {
