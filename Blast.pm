@@ -24,6 +24,24 @@ sub new {
 
 ### more subs go below ###
 
+# {{{ seqobjFromBlastDB (blastdb => blastdb, id => seqid);
+sub seqobjFromBlastDB {
+  my $self = shift(@_);
+  my %args = @_;
+  my $xstr = qq(/usr/local/bin/blastdbcmd -db $args{blastdb} -entry $args{id});
+  my $qfaa = qx($xstr);
+  my @temp = split(/\n/, $qfaa);
+  my $qseq = join("", @temp[1..$#temp]);
+  my $qobj = Bio::Seq->new(-seq => $qseq);
+  $qobj->display_name($args{id});
+  # if($main::debug) {
+  #   my $seqout = Bio::SeqIO->new(-file => ">>modebug", -format => 'fasta');
+  #   $seqout->write_seq($qobj);
+  # }
+  return($qobj);
+}
+# }}}
+
 # {{{ hitHashesFH (blastOutputFH, format(optional)) returns(list of hash(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
 sub hitHashesFH {
 my $self = shift(@_);
@@ -497,6 +515,9 @@ sub hspHashes {
             num_conserved => $num_conserved, hstr => $hsp->hit_string(), expect => $signif,
             homolstr => $hsp->homology_string(),
             hcov => $hcov, hcover => $hcov);
+        if($hsp->algorithm() =~ m/blastx|tblast/i) {
+          $rethash{frame} = $hsp->frame("hit");
+        }
         push(@retlist, {%rethash});
       }
       push(@retlist, '//');
@@ -1077,7 +1098,7 @@ return($retstr);
 }
 # }}}
 
-# {{{ reciblastp (hash(query, refdb, db, biodb, expect, comp_based_stats)).
+# {{{ reciblastp (hash(query, refdb, db, biodb, expect, comp_based_stats, hitorhsp)).
 # Returns two hashrefs or one hashref and undef.
 # query is a faa file with a single sequence or a protein seqobj.
 # db is the subject blast database
@@ -1093,6 +1114,8 @@ sub reciblastp {
   my $biodb = $args{biodb};
   my $refdb = $args{refdb};
   my $evalue = $args{expect};
+  my $hitOrHsp = "hsp";
+  if($args{hitorhsp}) { $hitOrHsp = $args{hitorhsp}; }
   unless ($evalue) { $evalue = 1; }
   my $comp_based_stats = 2;
   if($args{comp_based_stats}) {
@@ -1120,7 +1143,12 @@ sub reciblastp {
     qx($xstr);
   }
 # topHSPtopHit
-  my %forward = topHSPtopHit($self, $fn1, "blast");
+  my %forward;
+  if($hitOrHsp eq "hsp") {
+    %forward = topHSPtopHit($self, $fn1, "blast");
+  } else {
+    %forward = $self->tophit($fn1, "blast");
+  }
   my @forwardhits = topHSPs($self, $fn1, "blast");
   unlink($fn1);
 
@@ -1128,7 +1156,13 @@ sub reciblastp {
   if(%forward) {
   my $fhname = $forward{hname};
   # carp("Blast.pm: $fhname");
-  my $revquery = $biodb->get_Seq_by_id($fhname);
+  my $revquery;
+  if($biodb) {
+    $revquery = $biodb->get_Seq_by_id($fhname);
+  }
+  else {
+    $revquery = $self->seqobjFromBlastDB(blastdb => $db, id => $fhname);
+  }
     my($fh2, $fn2)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
     my $seqout2 = Bio::SeqIO->new(-fh => $fh2, -format => 'fasta');
     $seqout2->write_seq($revquery);
@@ -1137,7 +1171,16 @@ sub reciblastp {
     my $qxstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn2 -db $refdb -evalue $evalue -out $fn3);
     $qxstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($qxstr);
-  %reverse = topHSPtopHit($self, $fn3, "blast");
+  # my %reverse;
+  if($hitOrHsp eq "hsp") {
+    %reverse = topHSPtopHit($self, $fn3, "blast");
+  } else {
+    %reverse = $self->tophit($fn3, "blast");
+  }
+  # if($main::debug) {
+  #   copy($fn2, "second.query");
+  #   copy($fn3, "second.blast");
+  # }
   unlink($fn2);
   unlink($fn3);
   }
@@ -1374,7 +1417,6 @@ sub oldblastp {
   return(1);
 }
 # }}}
-
 
 # {{{ subroutines tablist, linelist, tabhash for printing lists and hashes.
 # The E versions are for printing to STDERR.

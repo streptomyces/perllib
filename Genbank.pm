@@ -605,13 +605,14 @@ close($ofh);
 }
 # }}}
 
-# {{{ sub bedfile (hash(accession|file, molecule, outfilename,
+# {{{ sub bedfile (hash(accession|file, [molecule], outfilename,
 # optional:tagasid, features[]))
 # Writes bed file for the molecule to the outfilename.
 sub bedfile {
 my $self = shift(@_);
 my %args = @_;
-my $molecule = $args{molecule};
+my $molecule_lr = $args{molecule};
+my @molecule = @{$molecule_lr};
 my $gbkfile;
 
 if($args{accession}) {
@@ -651,8 +652,9 @@ TRACK
 
 # print("track\tname=Features\tdescription="Features"\tuseScore=0\tvisibility=1\tcolor=255,255,255");
 my %ptCnt; # primary tag counts.
-
+my $molCnt = 0;
 while(my $seqobj=$seqio->next_seq()) {
+  my $molecule = $molecule[$molCnt];
   foreach my $feature ($seqobj->all_SeqFeatures()) {
     my $pritag = $feature->primary_tag();
     $ptCnt{$pritag} += 1;
@@ -692,6 +694,7 @@ while(my $seqobj=$seqio->next_seq()) {
     }
   }
 #$emblout->write_seq($seqobj);
+  $molCnt += 1;
 }
 close($ofh);
 }
@@ -1626,7 +1629,7 @@ if($incomingIsTemp) { unlink($filename); }
 close($fh);
 if($cdsCnt) {
   my $runbin = $blastbindir ."/makeblastdb";
-qx($runbin -in $fn -title "$args{title}" -dbtype prot -out $args{name});
+qx($runbin -in $fn -title "$args{title}" -dbtype prot -out $args{name} -parse_seqids);
 # print(STDERR qq($runbin -in $fn -title "$args{title}" -dbtype prot -out $args{name}), "\n");
 }
 #print(STDERR "$fn\n");
@@ -3068,5 +3071,8 @@ return(1);
 
 __END__
 
+perldoc Bio::PrimarySeq
 perldoc Bio::PrimarySeqI
+perldoc Bio::SeqFeature
+perldoc Bio::SeqFeatureI
 
