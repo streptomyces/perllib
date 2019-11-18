@@ -1633,7 +1633,6 @@ if($incomingIsTemp) { unlink($filename); }
 
 close($fh); # handle to fasta file $fn.
 my $dedupfn = _dedup_fasta($fn) or croak("Something");
-
 move($dedupfn, $fn);
 
 if($cdsCnt) {
@@ -1681,18 +1680,20 @@ sub _dedup_fasta {
   for my $shahex (keys %prh) {
     my @val = @{$prh{$shahex}};
     my $seq = shift(@val);
-    my $id = join("", @val);
-    my $probj = Bio::Seq->new(-seq => $seq);
-    if(exists($idone{$id})) {
-      $idone{$id} += 1;
-      my @temp = split("", $id);
-      my @temp1;
-      for my $temp (@temp) {
-        push(@temp1, $temp . "_" . $idone{$id});
+    my @ids;
+    for my $id (@val) {
+      if(exists($idone{$id})) {
+        $idone{$id} += 1;
+        my $idv = $id . "_" . $idone{$id};
+        push(@ids, $idv);
       }
-      $id = join("", @temp1);
+      else {
+        $idone{$id} = 0;
+        push(@ids, $id);
+      }
     }
-    else { $idone{$id} = 0; }
+    my $id = join("", @ids);
+    my $probj = Bio::Seq->new(-seq => $seq);
     $probj->display_id($id);
     push(@probj, $probj);
   }
