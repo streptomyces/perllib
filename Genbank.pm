@@ -1589,26 +1589,32 @@ foreach my $temp (@gbkNames)  {
       my $product;
       my $id;
       my $gene;
-      my @tags = $feature->get_all_tags();
-      foreach my $tag (@tags) {
-        if($tag=~m/product/i) {
-          $product=join(" ", $feature->get_tag_values($tag));
-        }
-        if($tag=~m/^locus_tag/) {
-          my $lt=join("|", $feature->get_tag_values($tag));
-          $id = $lt;
-        }
-        if($tag=~m/gene/) {
-          if($tag eq 'gene' and (not $feature->has_tag("locus_tag"))) {
-            my @temp = $feature->get_tag_values($tag);
-            $id = $temp[0];
-          }
-          else {
-            my @temp = $feature->get_tag_values($tag);
-            $gene = join("|", @temp);
-          }
+      if($feature->has_tag("locus_tag")) {
+        my @temp = $feature->get_tag_values("locus_tag");
+        $id = $temp[0];
+      }
+      if($feature->has_tag("gene")) {
+        my @temp = $feature->get_tag_values("gene");
+        $gene = $temp[0];
+        unless($id) {
+        $id = $gene;
         }
       }
+      if($feature->has_tag("product")) {
+        my @temp = $feature->get_tag_values("product");
+        $product = join("; ", @temp);
+      }
+      if($id =~ m/\W/) {
+        my @temp = split(/\W+/, $id);
+        my @temp1;
+        for my $temp (@temp) {
+          if($temp =~ m/\d+/) { push(@temp1, $temp); }
+        }
+        if(@temp1) { $id = $temp1[0];}
+        else {$id = $temp[0];}
+      }
+
+
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
       unless($id) { $id = $fr . "_CDS_at_" . $feature->start(); }
       my $aaobj = _feat_translate($feature);
