@@ -1132,14 +1132,27 @@ sub gbkfile2featuresTable {
 sub gbkfile2featuresHash {
   my $self = shift(@_);
   my %args = @_;
-  my $filename;
-  if(-r $args{file}) { $filename = $args{file}; } 
-  else { $filename = $gbkDir . '/' . $args{file}; }
+  my %rethash;
+  my %idcnt;
+
+  my @files = @{$args{file}};
+  for my $filename (@files) {
+
+  my $incomingIsTemp = 0;
+  if($filename =~ m/\.gz$/) {
+  my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+  unless(gunzip $filename => $gbfh, AutoClose => 1) {
+    close($gbfh); unlink($gbfn);
+    # next;
+    die "gunzip failed: $filename $GunzipError\n";
+  }
+  $filename = $gbfn;
+  $incomingIsTemp = 1;
+  }
   my $seqio = Bio::SeqIO->new(-file => $filename);
   my $seqobj = $seqio->next_seq();
   my @temp = $seqobj->all_SeqFeatures();
   my @features = sort _feat_sorter(@temp);
-  my %rethash;
   my $featCnt = 0;
   foreach my $feat (@features) {
     my $pritag = $feat->primary_tag();
@@ -1185,14 +1198,40 @@ sub gbkfile2featuresHash {
         $proteinid = $temp[0];
       }
 
-      my $id = defined($locus_tag) ? $locus_tag : $pritag . "_" . $featCnt;
+      my $id;
+      if(defined($locus_tag)) {
+        $id = $locus_tag;
+      }
+      elsif(defined($gene)) {
+        if($gene =~ m/\W/) {
+          my @temp = split(/\W+/, $gene);
+          my @temp1;
+          for my $temp (@temp) {
+            if($temp =~ m/\d+/) { push(@temp1, $temp); }
+          }
+          if(@temp1) { $id = $temp1[0];}
+          else {$id = $temp[0];}
+        }
+        else { $id = $gene; }
+      }
+      else {$id = $pritag . "_" . $featCnt};
       my %featrec = (id => $id, pritag => $pritag, start => $start_pos, end => $end_pos,
       strand => $strand, product => $product, gene => $gene, note => $note);
       if($old_locus_tag) { $featrec{olt} = $old_locus_tag; }
       if($proteinid) { $featrec{proteinid} = $proteinid; }
       if($dbxref) { $featrec{dbxref} = $dbxref; }
-      $rethash{$id} = {%featrec};
+      if(exists($idcnt{$id})) {
+        $idcnt{$id} += 1;
+        my $iid = $id . "_" . $idcnt{$id};
+        $rethash{$iid} = {%featrec};
+      }
+      else {
+        $idcnt{$id} = 0;
+        $rethash{$id} = {%featrec};
+      }
     }
+  }
+  if($incomingIsTemp) { unlink($filename); }
   }
   return(%rethash);
 }
