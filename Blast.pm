@@ -537,7 +537,7 @@ sub hspHashes {
       }
       push(@retlist, '//');
     }
-    push(@retlist, '////');
+    push(@retlist, '////'); # separates results if more than one in the input file.
   }
   return(@retlist);
 }

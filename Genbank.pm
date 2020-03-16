@@ -354,6 +354,7 @@ $tagasid = $args{tagasid};
 
 my @do_feats = qw(tRNA rRNA CDS misc_RNA nc_RNA);
 if($args{features}) {
+@do_feats = ();
 push(@do_feats, @{$args{features}});
 }
 my $score=0;
@@ -795,8 +796,51 @@ sub seqobjFeatPrexSQLite {
 }
 # }}}
 
+# {{{ sub feathash2pgtemp %(featref, handle, table)
+# featref is ref to a hash containing hashrefs. Made by gbkfile2featuresHash().
+# returns Pg DBIhandle and tablename
+# Either a seqobj of a sequence filename have to be provided.
+sub feathash2pgtemp {
+  my $self = shift(@_);
+  my %args = @_;
+  
+  my $handle = $args{handle};
+  my $table = $args{table};
+  my $featref = $args{featref}; # ref to a hash containing hashrefs.
+  my %feat = %{$featref}; # %feat is a hash of hashrefs.
+
+  my $creatstr = (qq/create temporary table $table (seqid text, id text, locus_tag text,
+  pritag text, start_pos integer, end_pos integer, strand integer,
+  product text) on commit drop/);
+  $handle->do($creatstr);
+
+
+  for my $id (keys(%feat)) {
+    my $qid = $handle->quote($id);
+    my $fr = $feat{$id};
+    my $qseqid = $handle->quote($fr->{seqid});
+    my $qptag = $handle->quote($fr->{pritag});
+    unless($fr->{product}) { $fr->{product} = "None"; }
+    my $qprod = $handle->quote($fr->{product});
+
+    my $start_pos = $fr->{start};
+    my $end_pos = $fr->{end};
+    my $strand = $fr->{strand};
+
+      my $instr = qq/insert into $table (seqid, id, locus_tag, pritag, start_pos, end_pos, strand, product)
+      values ($qseqid, $qid, $qid, $qptag, $start_pos, $end_pos, $strand, $qprod)/;
+      unless($handle->do($instr)) {
+        print(STDERR "$instr\n");
+        return($handle, $table, $creatstr);
+        }
+    }
+    return($handle, $table, $creatstr);
+}
+
+# }}}
+
 # {{{ sub gbkfile2pgtemp %(filename, handle, table)
-# returns Pg DBIahndle and tablename
+# returns Pg DBIhandle and tablename
 # Either a seqobj of a sequence filename have to be provided.
 sub gbkfile2pgtemp {
   my $self = shift(@_);
@@ -1128,7 +1172,7 @@ sub gbkfile2featuresTable {
 }
 # }}}
 
-# {{{ sub gbkfile2featuresHash %(file) returns a hash of hashrefs;
+# {{{ sub gbkfile2featuresHash %([file], [seqid]) returns a hash of hashrefs;
 sub gbkfile2featuresHash {
   my $self = shift(@_);
   my %args = @_;
@@ -1136,102 +1180,106 @@ sub gbkfile2featuresHash {
   my %idcnt;
 
   my @files = @{$args{file}};
+  my @seqids = @{$args{seqid}};
+  my $seqCnt = 0;
   for my $filename (@files) {
-
-  my $incomingIsTemp = 0;
-  if($filename =~ m/\.gz$/) {
-  my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
-  unless(gunzip $filename => $gbfh, AutoClose => 1) {
-    close($gbfh); unlink($gbfn);
-    # next;
-    die "gunzip failed: $filename $GunzipError\n";
-  }
-  $filename = $gbfn;
-  $incomingIsTemp = 1;
-  }
-  my $seqio = Bio::SeqIO->new(-file => $filename);
-  my $seqobj = $seqio->next_seq();
-  my @temp = $seqobj->all_SeqFeatures();
-  my @features = sort _feat_sorter(@temp);
-  my $featCnt = 0;
-  foreach my $feat (@features) {
-    my $pritag = $feat->primary_tag();
-    my $start_pos = $feat->start();
-    my $end_pos = $feat->end();
-    my $strand = $feat->strand();
-    
-    if($pritag eq 'CDS' or $pritag=~m/[tr]RNA/) {
-      $featCnt += 1;
-      my $locus_tag;
-      if($feat->has_tag('locus_tag')) {
-        my @lts = $feat->get_tag_values('locus_tag');
-        $locus_tag = $lts[0];
+    my $incomingIsTemp = 0;
+    if($filename =~ m/\.gz$/) {
+      my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+      unless(gunzip $filename => $gbfh, AutoClose => 1) {
+        close($gbfh); unlink($gbfn);
+# next;
+        die "gunzip failed: $filename $GunzipError\n";
       }
-      my $old_locus_tag;
-      if($feat->has_tag('old_locus_tag')) {
-        my @lts = $feat->get_tag_values('old_locus_tag');
-        $old_locus_tag = $lts[0];
-      }
-      my $product;
-      if($feat->has_tag('product')) {
-        my @prods = $feat->get_tag_values('product');
-        $product = join(" ", @prods);
-      }
-      my $gene;
-      if($feat->has_tag('gene')) {
-        my @temp = $feat->get_tag_values('gene');
-        $gene = join(" ", @temp);
-      }
-      my $note;
-      if($feat->has_tag('note')) {
-        my @temp = $feat->get_tag_values('note');
-        $note = join(" ", @temp);
-      }
-      my $dbxref;
-      if($feat->has_tag('db_xref')) {
-        my @temp = $feat->get_tag_values('db_xref');
-        $dbxref = join(" ", @temp);
-      }
-      my $proteinid;
-      if($feat->has_tag('protein_id')) {
-        my @temp = $feat->get_tag_values('protein_id');
-        $proteinid = $temp[0];
-      }
-
-      my $id;
-      if(defined($locus_tag)) {
-        $id = $locus_tag;
-      }
-      elsif(defined($gene)) {
-        if($gene =~ m/\W/) {
-          my @temp = split(/\W+/, $gene);
-          my @temp1;
-          for my $temp (@temp) {
-            if($temp =~ m/\d+/) { push(@temp1, $temp); }
-          }
-          if(@temp1) { $id = $temp1[0];}
-          else {$id = $temp[0];}
-        }
-        else { $id = $gene; }
-      }
-      else {$id = $pritag . "_" . $featCnt};
-      my %featrec = (id => $id, pritag => $pritag, start => $start_pos, end => $end_pos,
-      strand => $strand, product => $product, gene => $gene, note => $note);
-      if($old_locus_tag) { $featrec{olt} = $old_locus_tag; }
-      if($proteinid) { $featrec{proteinid} = $proteinid; }
-      if($dbxref) { $featrec{dbxref} = $dbxref; }
-      if(exists($idcnt{$id})) {
-        $idcnt{$id} += 1;
-        my $iid = $id . "_" . $idcnt{$id};
-        $rethash{$iid} = {%featrec};
-      }
-      else {
-        $idcnt{$id} = 0;
-        $rethash{$id} = {%featrec};
-      }
+      $filename = $gbfn;
+      $incomingIsTemp = 1;
     }
-  }
-  if($incomingIsTemp) { unlink($filename); }
+    my $seqio = Bio::SeqIO->new(-file => $filename);
+    while(my $seqobj = $seqio->next_seq()) {
+      my $seqid = $seqids[$seqCnt] ? $seqids[$seqCnt] : $seqobj->display_id();
+      my @temp = $seqobj->all_SeqFeatures();
+      my @features = sort _feat_sorter(@temp);
+      my $featCnt = 0;
+      foreach my $feat (@features) {
+        my $pritag = $feat->primary_tag();
+        my $start_pos = $feat->start();
+        my $end_pos = $feat->end();
+        my $strand = $feat->strand();
+
+        if($pritag eq 'CDS' or $pritag=~m/[tr]RNA/) {
+          $featCnt += 1;
+          my $locus_tag;
+          if($feat->has_tag('locus_tag')) {
+            my @lts = $feat->get_tag_values('locus_tag');
+            $locus_tag = $lts[0];
+          }
+          my $old_locus_tag;
+          if($feat->has_tag('old_locus_tag')) {
+            my @lts = $feat->get_tag_values('old_locus_tag');
+            $old_locus_tag = $lts[0];
+          }
+          my $product;
+          if($feat->has_tag('product')) {
+            my @prods = $feat->get_tag_values('product');
+            $product = join(" ", @prods);
+          }
+          my $gene;
+          if($feat->has_tag('gene')) {
+            my @temp = $feat->get_tag_values('gene');
+            $gene = join(" ", @temp);
+          }
+          my $note;
+          if($feat->has_tag('note')) {
+            my @temp = $feat->get_tag_values('note');
+            $note = join(" ", @temp);
+          }
+          my $dbxref;
+          if($feat->has_tag('db_xref')) {
+            my @temp = $feat->get_tag_values('db_xref');
+            $dbxref = join(" ", @temp);
+          }
+          my $proteinid;
+          if($feat->has_tag('protein_id')) {
+            my @temp = $feat->get_tag_values('protein_id');
+            $proteinid = $temp[0];
+          }
+
+          my $id;
+          if(defined($locus_tag)) {
+            $id = $locus_tag;
+          }
+          elsif(defined($gene)) {
+            if($gene =~ m/\W/) {
+              my @temp = split(/\W+/, $gene);
+              my @temp1;
+              for my $temp (@temp) {
+                if($temp =~ m/\d+/) { push(@temp1, $temp); }
+              }
+              if(@temp1) { $id = $temp1[0];}
+              else {$id = $temp[0];}
+            }
+            else { $id = $gene; }
+          }
+          else {$id = $pritag . "_" . $featCnt};
+          my %featrec = (id => $id, seqid => $seqid, pritag => $pritag, start => $start_pos, end => $end_pos,
+              strand => $strand, product => $product, gene => $gene, note => $note);
+          if($old_locus_tag) { $featrec{olt} = $old_locus_tag; }
+          if($proteinid) { $featrec{proteinid} = $proteinid; }
+          if($dbxref) { $featrec{dbxref} = $dbxref; }
+          if(exists($idcnt{$id})) {
+            $idcnt{$id} += 1;
+            my $iid = $id . "_" . $idcnt{$id};
+            $rethash{$iid} = {%featrec};
+          }
+          else {
+            $idcnt{$id} = 0;
+            $rethash{$id} = {%featrec};
+          }
+        }
+      }
+      $seqCnt += 1;
+    }
+    if($incomingIsTemp) { unlink($filename); }
   }
   return(%rethash);
 }
@@ -1643,8 +1691,8 @@ foreach my $temp (@gbkNames)  {
         my @temp = $feature->get_tag_values("product");
         $product = join("; ", @temp);
       }
-      if($id =~ m/\W/) {
-        my @temp = split(/\W+/, $id);
+      if($id =~ m/[^\w.]/) {
+        my @temp = split(/[^\w.]/, $id);
         my @temp1;
         for my $temp (@temp) {
           if($temp =~ m/\d+/) { push(@temp1, $temp); }
@@ -1667,7 +1715,6 @@ foreach my $temp (@gbkNames)  {
       $aaobj->description($desc);
       $seqout->write_seq($aaobj);
     }
-
   }
     $contig_serial += 1;
   }
@@ -3155,6 +3202,11 @@ sub genbank_lt_prot {
         }
         if($feature->has_tag("gene")) {
           push(@lt, $feature->get_tag_values("gene"));
+        }
+        unless(@lt) {
+          my $fr = $feature->strand() == 1 ? 'F' : 'R';
+          my $fstart = $feature->start();
+          push(@lt, $fr . "_CDS_at_" . $fstart);
         }
         if(grep {$_ eq $args{locus_tag}} @lt) {
           my $aaobj = _feat_translate($feature);
