@@ -1186,6 +1186,7 @@ sub reciblastp {
   else {
     $revquery = $self->seqobjFromBlastDB(blastdb => $db, id => $fhname);
   }
+  if($revquery) {
     my($fh2, $fn2)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
     my $seqout2 = Bio::SeqIO->new(-fh => $fh2, -format => 'fasta');
     $seqout2->write_seq($revquery);
@@ -1206,6 +1207,7 @@ sub reciblastp {
   # }
   unlink($fn2);
   unlink($fn3);
+  }
   }
   else { return(); }
 

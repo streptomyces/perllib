@@ -1453,7 +1453,7 @@ sub locusTag2aaObj {
       my @features = $seqobj->all_SeqFeatures();
       foreach my $feat (@features) {
         unless ($feat->primary_tag() eq 'CDS') { next ; }
-        my @idtags = ("locus_tag", "old_locus_tag", "gene");
+        my @idtags = ("locus_tag", "protein_id", "old_locus_tag", "gene");
         my $featid;
         for my $idt (@idtags) {
           if($feat->has_tag($idt)) {
@@ -1658,7 +1658,8 @@ foreach my $temp (@gbkNames)  {
   unless(gunzip $filename => $gbfh, AutoClose => 1) {
     close($gbfh); unlink($gbfn);
     # next;
-    die "gunzip failed: $filename $GunzipError\n";
+    print(STDERR "gunzip failed: $filename $GunzipError\n");
+    return();
   }
   $filename = $gbfn;
   $incomingIsTemp = 1;
@@ -1672,7 +1673,6 @@ foreach my $temp (@gbkNames)  {
       my $f_start = $feature->start();
       my $f_end = $feature->end();
       my $f_strand = $feature->strand();
-      $cdsCnt += 1;
       my $product;
       my $id;
       my $gene;
@@ -1680,11 +1680,18 @@ foreach my $temp (@gbkNames)  {
         my @temp = $feature->get_tag_values("locus_tag");
         $id = $temp[0];
       }
+      if($feature->has_tag("protein_id")) {
+        my @temp = $feature->get_tag_values("protein_id");
+        my $protein_id = $temp[0];
+        unless($id) {
+          $id = $protein_id;
+        }
+      }
       if($feature->has_tag("gene")) {
         my @temp = $feature->get_tag_values("gene");
         $gene = $temp[0];
         unless($id) {
-        $id = $gene;
+          $id = $gene;
         }
       }
       if($feature->has_tag("product")) {
@@ -1701,19 +1708,21 @@ foreach my $temp (@gbkNames)  {
         else {$id = $temp[0];}
       }
 
-
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
-      unless($id) { $id = $fr . "_CDS_at_" . $feature->start(); }
-      my $aaobj = _feat_translate($feature);
-      $aaobj->display_name($id);
-      if($gene) { $product .= " gene: $gene"; }
-      my $desc;
-      if($args{locinfo}) {
-        $desc = "$f_start $f_end $f_strand $contig_serial $product";
+      # unless($id) { $id = $fr . "_CDS_at_" . $feature->start(); }
+      if($id) {
+        my $aaobj = _feat_translate($feature);
+        $aaobj->display_name($id);
+        if($gene) { $product .= " gene: $gene"; }
+        my $desc;
+        if($args{locinfo}) {
+          $desc = "$f_start $f_end $f_strand $contig_serial $product";
+        }
+        else { $desc = $product; }
+        $aaobj->description($desc);
+        $seqout->write_seq($aaobj);
+        $cdsCnt += 1;
       }
-      else { $desc = $product; }
-      $aaobj->description($desc);
-      $seqout->write_seq($aaobj);
     }
   }
     $contig_serial += 1;
@@ -2801,48 +2810,95 @@ return(@foundAt);
 }
 # }}}
 
-# {{{ sub lt2faa %(file, locus_tag, ofh) returns 1
+# {{{ sub lt2faa %(file, locus_tag, ofh or seqout or obj) returns 1
+# if obj then Bio::Seq object is returned.
 sub lt2faa {
   my $self = shift(@_);
   my %args = @_;
-  my ($seqio, $seqobj);
-  if($args{file}) {
-  my $temp = $args{file};
-  my $draftName = $draftDir . '/' . $temp;
-  my $finName = $gbkDir . '/' . $temp;
-  my $filename;
-  if(-e $temp) { $filename = $temp; }
-  elsif (-e $finName) { $filename = $finName; }
-  elsif (-e $draftName) { $filename = $draftName; }
-  else { croak("Could not find $temp genbank file\n"); }
-  $seqio = Bio::SeqIO->new(-file => $filename);
-  $seqobj = $seqio->next_seq();
-  }
-  elsif($args{seqobj}) {
-  $seqobj = $args{seqobj};
-  }
+  my ($seqio);
 
-  my $seqout = Bio::SeqIO->new(-fh => $args{ofh}, -format => 'fasta');
-  my @features = $seqobj->all_SeqFeatures();
-  foreach my $feat (@features) {
-    unless ($feat->primary_tag() eq 'CDS') { next ; }
-    if($feat->has_tag('locus_tag')) {
-      my @lts = $feat->get_tag_values('locus_tag');
-      if(grep {$_ eq $args{locus_tag}} @lts) {
-        my $aaobj = _feat_translate($feat);
+  my $incomingIsTemp = 0;
+  if($args{file} =~ m/\.gz$/) {
+    my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+    unless(gunzip $args{file} => $gbfh, AutoClose => 1) {
+      close($gbfh); unlink($gbfn);
+      die "gunzip failed: $args{file} $GunzipError\n";
+    }
+    $args{file} = $gbfn;
+    $incomingIsTemp = 1;
+  }
+  $seqio = Bio::SeqIO->new(-file => $args{file}, -format => 'genbank');
+  my $seqout;
+  if($args{seqout}) { $seqout = $args{seqout}; }
+  elsif($args{ofh}) {
+    $seqout = Bio::SeqIO->new(-fh => $args{ofh}, -format => 'fasta');
+  }
+  while(my $seqobj = $seqio->next_seq()) {
+    my @features = $seqobj->all_SeqFeatures();
+    foreach my $feature (@features) {
+      if($feature->primary_tag() eq 'CDS') {
+        my $f_start = $feature->start();
+        my $f_end = $feature->end();
+        my $f_strand = $feature->strand();
         my $product;
-        if($feat->has_tag('product')) {
-          $product = join(" ", $feat->get_tag_values('product'));
+        my $id;
+        my $gene;
+        if($feature->has_tag("locus_tag")) {
+          my @temp = $feature->get_tag_values("locus_tag");
+          $id = $temp[0];
         }
-        #print("=== $product\n");
-        $aaobj->display_name($args{locus_tag});
-        $aaobj->description($product);
-        $seqout->write_seq($aaobj);
+        elsif($feature->has_tag("old_locus_tag")) {
+          my @temp = $feature->get_tag_values("old_locus_tag");
+          $id = $temp[0];
+        }
+        elsif($feature->has_tag("protein_id")) {
+          my @temp = $feature->get_tag_values("protein_id");
+          my $protein_id = $temp[0];
+          unless($id) {
+            $id = $protein_id;
+          }
+        }
+        elsif($feature->has_tag("gene")) {
+          my @temp = $feature->get_tag_values("gene");
+          $gene = $temp[0];
+          unless($id) {
+            $id = $gene;
+          }
+        }
+        else {
+          next;
+        }
+        if($feature->has_tag("product")) {
+          my @temp = $feature->get_tag_values("product");
+          $product = join("; ", @temp);
+        }
+        if($id =~ m/[^\w.]/) {
+          my @temp = split(/[^\w.]/, $id);
+          my @temp1;
+          for my $temp (@temp) {
+            if($temp =~ m/\d+/) { push(@temp1, $temp); }
+          }
+          if(@temp1) { $id = $temp1[0];}
+          else {$id = $temp[0];}
+        }
+        if($id eq $args{locus_tag}) {
+          my $aaobj = _feat_translate($feature);
+          $aaobj->display_name($id);
+          if($gene) { $product .= " gene: $gene"; }
+          my $desc = $product;
+          $aaobj->description($desc);
+          if($incomingIsTemp) { unlink $args{file}; }
+          if($args{obj}) { return $aaobj; }
+          elsif($seqout) {
+            $seqout->write_seq($aaobj);
+            return($id);
+          }
+        }
       }
     }
   }
-  close($args{ofh});
-  return(1);
+  if($incomingIsTemp) { unlink $args{file}; }
+  return();
 }
 # }}}
 
