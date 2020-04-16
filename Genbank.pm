@@ -1618,7 +1618,7 @@ return(name => $args{name}, entryCount => \%entryCount, files => [@gbkNames]);
 # }}}
 
 # {{{ sub genbank2blastpDB %([files], name, title, faafn, locinfo)
-# returns %(name, [files], faafn);
+# returns %(name, [files], faafn, numContigs);
 # If you supply a faafn then it is your responsibility to unlink it.
 sub genbank2blastpDB {
 my $self = shift(@_);
@@ -1636,9 +1636,7 @@ else {
 }
 
 my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
-
 my @gbkNames = @{$args{files}};
-
 my $cdsCnt = 0;
 my $contig_serial = 0;
 
@@ -1652,20 +1650,30 @@ foreach my $temp (@gbkNames)  {
   elsif (-e $draftName) { $filename = $draftName; }
   else { croak("Could not find $temp genbank file\n"); }
 
-  my $incomingIsTemp = 0;
+  my $ifh;
   if($filename =~ m/\.gz$/) {
-  my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
-  unless(gunzip $filename => $gbfh, AutoClose => 1) {
-    close($gbfh); unlink($gbfn);
-    # next;
-    print(STDERR "gunzip failed: $filename $GunzipError\n");
-    return();
+    $ifh = tempfile();
+    if(gunzip $filename => $ifh) {
+      seek($ifh,0,0);
+    }
+    else {
+      close($ifh);
+# next;
+      print(STDERR "gunzip failed: $filename $GunzipError\n");
+      next;
+    }
   }
-  $filename = $gbfn;
-  $incomingIsTemp = 1;
+  else {
+    if(open($ifh, "<", $filename)) {
+      my $noop = 1;
+    }
+    else {
+      print(STDERR "Failed to open $filename\n");
+      next;
+    }
   }
 
-  my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
+  my $seqio = Bio::SeqIO->new(-fh => $ifh, -format => "genbank");
   while(my $seqobj = $seqio->next_seq()) {
   foreach my $feature ($seqobj->all_SeqFeatures()) {
 
@@ -1698,16 +1706,7 @@ foreach my $temp (@gbkNames)  {
         my @temp = $feature->get_tag_values("product");
         $product = join("; ", @temp);
       }
-      if($id =~ m/[^\w.]/) {
-        my @temp = split(/[^\w.]/, $id);
-        my @temp1;
-        for my $temp (@temp) {
-          if($temp =~ m/\d+/) { push(@temp1, $temp); }
-        }
-        if(@temp1) { $id = $temp1[0];}
-        else {$id = $temp[0];}
-      }
-
+      $id =~ s/\W+/_/g;
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
       # unless($id) { $id = $fr . "_CDS_at_" . $feature->start(); }
       if($id) {
@@ -1728,12 +1727,11 @@ foreach my $temp (@gbkNames)  {
     $contig_serial += 1;
   }
 #$emblout->write_seq($seqobj);
-if($incomingIsTemp) { unlink($filename); }
 }
 # }}}
 
 close($fh); # handle to fasta file $fn.
-my $dedupfn = _dedup_fasta($fn) or croak("Something");
+my $dedupfn = _dedup_fasta($fn) or return();
 move($dedupfn, $fn);
 
 if($cdsCnt) {
@@ -2872,15 +2870,7 @@ sub lt2faa {
           my @temp = $feature->get_tag_values("product");
           $product = join("; ", @temp);
         }
-        if($id =~ m/[^\w.]/) {
-          my @temp = split(/[^\w.]/, $id);
-          my @temp1;
-          for my $temp (@temp) {
-            if($temp =~ m/\d+/) { push(@temp1, $temp); }
-          }
-          if(@temp1) { $id = $temp1[0];}
-          else {$id = $temp[0];}
-        }
+        $id =~ s/\W+/_/g;
         if($id eq $args{locus_tag}) {
           my $aaobj = _feat_translate($feature);
           $aaobj->display_name($id);
