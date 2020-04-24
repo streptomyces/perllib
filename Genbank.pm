@@ -2160,41 +2160,55 @@ close($tfh);
 }
 # }}}
 
-# {{{ sub genbank16sfna %([files], ofh, [ids] ) returns %(name, [files]);
-# ids, if given should have to same number of elements as the number of files.
-# to that filehandle and the filehandle closed.
+# {{{ sub genbank16sfna %(file, id) returns Bio::Seq;
 sub genbank16sfna {
   my $self = shift(@_);
   my $errh = $self->{errh};
   my %args = @_;
-  my @ids = @{$args{ids}};
 
-  my $ofh = $args{ofh};
-  my $seqout = Bio::SeqIO->new(-fh => $ofh, -format => 'fasta');
+  my $ndx = 0;
 
-  my @gbkNames = @{$args{files}};
-
-my $ndx = 0;
-
-  foreach my $temp (@gbkNames)  {
-    my $filename;
-    if(-e $temp or -l $temp) { $filename = $temp; }
-    else { $filename = $gbkDir . '/' . $temp; }
-    unless(-r $filename) {
-      carp("Could not read $filename\n");
+    my $filename = $args{file};
+    my $id = $args{id};
+    unless(-s $filename and -r $filename) {
+      print(STDERR "$filename does not exists or is not readable\n");
+      return();
     }
-    if(-z $filename) {
-      carp("Zero size of $filename\n");
+
+    my $ifh;
+# {{{ Deal with a gzipped filename.
+    if($filename =~ m/\.gz$/) {
+      $ifh = tempfile();
+      if(gunzip $filename => $ifh) {
+        seek($ifh,0,0);
+      }
+      else {
+        close($ifh);
+        print(STDERR "gunzip failed: $filename $GunzipError\n");
+        return();
+      }
     }
-    my $seqio = Bio::SeqIO->new(-file => $filename);
+    else {
+      if(open($ifh, "<", $filename)) {
+        my $noop = 1;
+      }
+      else {
+        print(STDERR "Failed to open $filename\n");
+        return();
+      }
+    }
+#}}}
+
+    my @retlist;
+    my $seqio = Bio::SeqIO->new(-fh => $ifh);
     my ($gbkBn, $directory, $ext) = fileparse($filename, qr/\.[^.]*/);
     my $seqobj = $seqio->next_seq();
     my @temp = $seqobj->all_SeqFeatures();
     my $rrnaCnt = 0;
     foreach my $feature (sort _feat_sorter @temp) {
       if($feature->primary_tag() eq 'rRNA'
-        and $feature->length() > 1200
-        and $feature->length() < 1800
+          and $feature->length() > 1200
+          and $feature->length() < 1800
         ) {
         $rrnaCnt += 1;
         my $product;
@@ -2202,29 +2216,20 @@ my $ndx = 0;
           my @temp = $feature->get_tag_values("product");
           $product = join(", ", @temp);
         }
-        my $id;
-        if($ids[$ndx]) {
-        $id = $ids[$ndx] . "_" . $rrnaCnt;
-        }
-        else {
-        $id = $gbkBn . "_" . $rrnaCnt;
-        }
         my $featobj=$feature->spliced_seq(-nosort => '1');
         if($featobj) {
-          $featobj->display_name($id);
+          $featobj->display_name($id . "_" . $rrnaCnt);
           if($product) {
             $featobj->description($product);
           }
-          $seqout->write_seq($featobj);
+          push(@retlist, $featobj);
         }
         else {
           print($errh "Failed to get a feature object for $id\n");
         }
       }
     }
-#$emblout->write_seq($seqobj);
-    $ndx += 1;
-  }
+return(@retlist);
 }
 # }}}
 
@@ -3270,6 +3275,8 @@ sub genbank_lt_prot {
   return($retobj);
 }
 # }}}
+
+
 
 
 return(1);
