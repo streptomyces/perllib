@@ -16,6 +16,7 @@ my $template="genbankpmXXXXX";
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 use Digest::SHA1  qw(sha1 sha1_hex sha1_base64);
 use File::Copy;
+use List::Util qw(any all);
 # our @ISA = qw(Scoglobal);
 
 my $soukDataDir = '/home/nouser/souk/data';
@@ -2894,6 +2895,83 @@ sub lt2faa {
   }
   if($incomingIsTemp) { unlink $args{file}; }
   return();
+}
+# }}}
+
+# {{{ sub multi_lt2faa %(file, locus_tag) returns a list of Bio::Seq
+sub multi_lt2faa {
+  my $self = shift(@_);
+  my %args = @_;
+  my $wantedref = $args{locus_tag};
+  my @wanted = @{$wantedref};
+  my @retlist;
+  
+  my ($seqio);
+  my $incomingIsTemp = 0;
+  if($args{file} =~ m/\.gz$/) {
+    my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+    unless(gunzip $args{file} => $gbfh, AutoClose => 1) {
+      close($gbfh); unlink($gbfn);
+      die "gunzip failed: $args{file} $GunzipError\n";
+    }
+    $args{file} = $gbfn;
+    $incomingIsTemp = 1;
+  }
+  $seqio = Bio::SeqIO->new(-file => $args{file}, -format => 'genbank');
+  while(my $seqobj = $seqio->next_seq()) {
+    my @features = $seqobj->all_SeqFeatures();
+    foreach my $feature (@features) {
+      if($feature->primary_tag() eq 'CDS') {
+        my $f_start = $feature->start();
+        my $f_end = $feature->end();
+        my $f_strand = $feature->strand();
+        my $product;
+        my $id;
+        my $gene;
+        if($feature->has_tag("locus_tag")) {
+          my @temp = $feature->get_tag_values("locus_tag");
+          $id = $temp[0];
+        }
+        elsif($feature->has_tag("old_locus_tag")) {
+          my @temp = $feature->get_tag_values("old_locus_tag");
+          $id = $temp[0];
+        }
+        elsif($feature->has_tag("protein_id")) {
+          my @temp = $feature->get_tag_values("protein_id");
+          my $protein_id = $temp[0];
+          unless($id) {
+            $id = $protein_id;
+          }
+        }
+        elsif($feature->has_tag("gene")) {
+          my @temp = $feature->get_tag_values("gene");
+          $gene = $temp[0];
+          unless($id) {
+            $id = $gene;
+          }
+        }
+        else {
+          next;
+        }
+        if($feature->has_tag("product")) {
+          my @temp = $feature->get_tag_values("product");
+          $product = join("; ", @temp);
+        }
+        # $id =~ s/\W+/_/g;
+        if(any {$_ eq $id} @wanted) {
+          my $aaobj = _feat_translate($feature);
+          $aaobj->display_name($id);
+          if($gene) { $product .= " gene: $gene"; }
+          my $desc = $product;
+          $aaobj->description($desc);
+          push(@retlist, $aaobj);
+        }
+      }
+      if(scalar(@retlist) >= scalar(@wanted)) { last; }
+    }
+  }
+  if($incomingIsTemp) { unlink $args{file}; }
+  return(@retlist);
 }
 # }}}
 
