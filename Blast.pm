@@ -614,52 +614,52 @@ sub n_hspHashes {
 # {{{ topHSPs (blastOutputFileName) returns(list of hashes(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
 # Gives the top HSP only of each hit in each blast result in a file
 sub topHSPs {
-my $self = shift(@_);
-my $filename=shift(@_);
-my $format = 'blast';
-my $temp = shift(@_);
-if($temp) { $format = $temp; }
+  my $self = shift(@_);
+  my $filename=shift(@_);
+  my $format = 'blast';
+  my $temp = shift(@_);
+  if($temp) { $format = $temp; }
 #print(STDERR "in topHit $filename\n");
   my $searchio = new Bio::SearchIO( -format => $format,
-				    -file   => $filename );
+      -file   => $filename );
   my @retlist;
-while( my $result = $searchio->next_result() ) {
-  unless($result) { return();}
-  my $qname=$result->query_name();
-  my $qlen=$result->query_length();
-  while (my $hit = $result->next_hit()) {
-    my $num_hsps = $hit->num_hsps();
-    my $hsp = $hit->next_hsp();
-    if($hsp) {
-    my $hname=$hit->name();
-    my $hlen=$hit->length();
-    my $frac_id = sprintf("%.3f", $hsp->frac_identical());
-    my $hdesc=$hit->description();
-    my $signif=$hsp->significance();
-    my $laq=$hsp->length('query');
-    my $lah=$hsp->length('hit');
-    my $qcov = sprintf("%.3f", $laq/$qlen);
-    my $hcov = sprintf("%.3f", $lah/$hlen);
-    my $qstart = $hsp->start('query');
-    my $qend = $hsp->end('query');
-    my $hstart = $hsp->start('hit');
-    my $hend = $hsp->end('hit');
-    my $qgaps = $hsp->gaps("query");
-    my $hgaps = $hsp->gaps("hit");
-    my $hframe = $hsp->frame('hit');
-    my $bitScore = $hsp->bits();
-    my $strand = $hsp->strand('hit');
-    my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
-                   signif => $signif, bit => $bitScore, hdesc => $hdesc,
-                   hstrand => $strand, qstart => $qstart, hframe => $hframe,
-                   qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
-                   fracid => $frac_id, qcov => $qcov, hcov => $hcov, numhsps => $num_hsps,
-                   qgaps => $qgaps, hgaps => $hgaps, hcover => $hcov, qcover => $qcov);
-    push(@retlist, {%rethash});
-}
+  while( my $result = $searchio->next_result() ) {
+    unless($result) { return();}
+    my $qname=$result->query_name();
+    my $qlen=$result->query_length();
+    while (my $hit = $result->next_hit()) {
+      my $num_hsps = $hit->num_hsps();
+      my $hsp = $hit->next_hsp();
+      if($hsp) {
+        my $hname=$hit->name();
+        my $hlen=$hit->length();
+        my $frac_id = sprintf("%.3f", $hsp->frac_identical());
+        my $hdesc=$hit->description();
+        my $signif=$hsp->significance();
+        my $laq=$hsp->length('query');
+        my $lah=$hsp->length('hit');
+        my $qcov = sprintf("%.3f", $laq/$qlen);
+        my $hcov = sprintf("%.3f", $lah/$hlen);
+        my $qstart = $hsp->start('query');
+        my $qend = $hsp->end('query');
+        my $hstart = $hsp->start('hit');
+        my $hend = $hsp->end('hit');
+        my $qgaps = $hsp->gaps("query");
+        my $hgaps = $hsp->gaps("hit");
+        my $hframe = $hsp->frame('hit');
+        my $bitScore = $hsp->bits();
+        my $strand = $hsp->strand('hit');
+        my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
+            signif => $signif, bit => $bitScore, hdesc => $hdesc,
+            hstrand => $strand, qstart => $qstart, hframe => $hframe,
+            qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
+            fracid => $frac_id, qcov => $qcov, hcov => $hcov, numhsps => $num_hsps,
+            qgaps => $qgaps, hgaps => $hgaps, hcover => $hcov, qcover => $qcov);
+        push(@retlist, {%rethash});
+      }
+    }
   }
-}
-return(@retlist);
+  return(@retlist);
 }
 # }}}
 
