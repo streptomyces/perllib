@@ -517,6 +517,8 @@ sub hspHashes {
         my $qend = $hsp->end('query');
         my $hstart = $hsp->start('hit');
         my $hend = $hsp->end('hit');
+        my $qgaps = $hsp->gaps("query");
+        my $hgaps = $hsp->gaps("hit");
         my $hframe = $hsp->frame('hit');
         my $bitScore = $hsp->bits();
         my $strand = $hsp->strand('hit');
@@ -525,11 +527,12 @@ sub hspHashes {
             hstrand => $strand, qstart => $qstart, hframe => $hframe,
             qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq, lah => $lah,
             fracid => $frac_id, fracsim => $frac_conserved, qcov => $qcov, qcover => $qcov,
-            qstr => $hsp->query_string(), numhsps => $num_hsps,
+            hgaps => $hgaps, qgaps => $qgaps, qstr => $hsp->query_string(), numhsps => $num_hsps,
             numid => $num_id, num_id => $num_id, numconserved => $num_conserved,
             num_conserved => $num_conserved, hstr => $hsp->hit_string(), expect => $signif,
             homolstr => $hsp->homology_string(),
             hcov => $hcov, hcover => $hcov);
+
         if($hsp->algorithm() =~ m/blastx|tblast/i) {
           $rethash{frame} = $hsp->frame("hit");
         }
@@ -798,6 +801,8 @@ while( my $result = $searchio->next_result() ) {
     my $qstart = $hit->start('query');
     my $qend = $hit->end('query');
     my $hstart = $hit->start('hit');
+    my $qgaps = $hit->gaps("query");
+    my $hgaps = $hit->gaps("hit");
     my $hend = $hit->end('hit');
     my $bitScore = $hit->bits();
     my $strand = $hit->strand('hit');
@@ -807,6 +812,7 @@ while( my $result = $searchio->next_result() ) {
                    signif => $signif, bit => $bitScore, hdesc => $hdesc,
                    qcover => $qcover, hcover => $hcover, hstrand => $strand,
                    qcov => $qcover, hcov => $hcover, evalue => $signif,
+                   hgaps => $hgaps, qgaps => $qgaps,
                    qstart => $qstart, qdesc => $qdesc, expect => $signif,
                    qend => $qend, hstart => $hstart, hend => $hend, alnlen => $laq,
                    fracid => $frac_id, numhsps => $num_hsps);
