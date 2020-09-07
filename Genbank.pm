@@ -1707,7 +1707,7 @@ foreach my $temp (@gbkNames)  {
         my @temp = $feature->get_tag_values("product");
         $product = join("; ", @temp);
       }
-      $id =~ s/\W+/_/g;
+      # $id =~ s/\W+/_/g;
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
       # unless($id) { $id = $fr . "_CDS_at_" . $feature->start(); }
       if($id) {
@@ -3353,8 +3353,6 @@ sub genbank_lt_prot {
   return($retobj);
 }
 # }}}
-
-
 
 
 return(1);

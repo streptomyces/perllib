@@ -1040,14 +1040,14 @@ sub rpsblast {
     $db = $args{db};
   }
   else {
-    $db = qw(/home/sco/ncbiftp/Cdd);
+    $db = qw(/mnt/isilon/blast_databases/cdd/little_endian/Cdd);
   }
   my $expect;
   if(exists($args{expect})) {
     $expect = $args{expect};
   }
   else {
-    $expect = 1e-4;
+    $expect = 1e-2;
   }
 
  
@@ -1446,6 +1446,118 @@ sub oldblastp {
   close($ofh);
   unlink($fn1);
   return(1);
+}
+# }}}
+
+# {{{ recurblastp (hash(query, refdb, db, biodb, expect, comp_based_stats, hitorhsp)).
+# One forward blast search. Then all hits are used as reverse query till the
+# reverse hit is not the same as forward query.
+# This is to check whether the subject proteome has more than one copy of the
+# forward query. First written for Kelley in 2020 in a Scolocal.pm. Later on
+# used for others as well.
+sub recurblastp {
+  my $self = shift(@_);
+  my %args = @_;
+  my @retlist;
+  my $query = $args{query};
+  my $db = $args{db};
+  my $biodb = $args{biodb};
+  my $refdb = $args{refdb};
+  my $evalue = $args{expect};
+  my $hitOrHsp = "hsp";
+  if($args{hitorhsp}) { $hitOrHsp = $args{hitorhsp}; }
+  unless ($evalue) { $evalue = 1; }
+  my $comp_based_stats = 2;
+  if($args{comp_based_stats}) {
+    $comp_based_stats = $args{comp_based_stats};
+  }
+  my $outfmt = 0;
+
+# Note the use of -comp_based_stats to 2 in the blastp calls below.
+
+  my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+  close($fh1);
+  if(ref($query)) {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    $seqout->write_seq($query);
+    close($fh);
+    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn);
+    $xstr .= qq( -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    qx($xstr);
+    unlink($fn);
+  }
+  elsif(-e $query and -r $query) {
+    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $query);
+    $xstr .= qq( -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    qx($xstr);
+  }
+  else {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    $self->seqfileFromBlastDB(blastdb => $refdb, id => $query, ofh => $fh);
+    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn);
+    $xstr .= qq( -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    qx($xstr);
+    unlink($fn);
+  }
+  
+  my @forwardhits;
+  if($hitOrHsp eq "hsp") {
+    @forwardhits = $self->hspHashes($fn1, "blast"); # list of hashrefs.
+  } else {
+    @forwardhits = $self->hitHashes($fn1, "blast"); # list of hashrefs.
+  }
+  unlink($fn1);
+
+  for my $forw (@forwardhits) {
+    if(ref($forw)) {
+    my %forward = %{$forw};
+    my %reverse;
+    if(%forward) {
+      my $fhname = $forward{hname};
+# carp("Blast.pm: $fhname");
+      my $revquery;
+      if($biodb) {
+        $revquery = $biodb->get_Seq_by_id($fhname);
+      }
+      else {
+        $revquery = $self->seqobjFromBlastDB(blastdb => $db, id => $fhname);
+      }
+      if($revquery) {
+        my($fh2, $fn2)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+        my $seqout2 = Bio::SeqIO->new(-fh => $fh2, -format => 'fasta');
+        $seqout2->write_seq($revquery);
+        close($fh2);
+        my($fh3, $fn3)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+        my $qxstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn2);
+        $qxstr .= qq( -db $refdb -evalue $evalue -out $fn3);
+        $qxstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+        qx($qxstr);
+# my %reverse;
+        if($hitOrHsp eq "hsp") {
+          %reverse = $self->topHSPtopHit($fn3, "blast");
+        } else {
+          %reverse = $self->tophit($fn3, "blast");
+        }
+        unlink($fn2);
+        unlink($fn3);
+      }
+      else { carp("Failed to retrieve reverse query $fhname from $db"); }
+      if($reverse{hname} eq $forward{qname}) {
+        push(@retlist, [\%forward, \%reverse]);
+      }
+      else {
+        push(@retlist, [\%forward, \%reverse]);
+        last;
+      }
+    }
+  } # for my $forw (@forwardhits)
+  }
+  unless(@retlist) { push(@retlist, ["NFH", "NRH"]); }
+  return(@retlist);
 }
 # }}}
 
