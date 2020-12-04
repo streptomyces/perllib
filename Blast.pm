@@ -1229,6 +1229,112 @@ sub reciblastp {
 }
 # }}}
 
+
+# {{{ reciblastn (hash(query, refdb, db, biodb, expect, hitorhsp)).
+# Returns two hashrefs or one hashref and undef.
+# query is a fna file with a single sequence or a nucleotide seqobj.
+# db is the subject blast database
+# refdb is the reference blast database. i.e. of the organism from which
+#       the query comes.
+# biodb is the Bio::DB::Fasta object from which the hit id can be retrieved.
+# expect is the evalue threshold
+sub reciblastn {
+  my $self = shift(@_);
+  my %args = @_;
+  my $query = $args{query};
+  my $db = $args{db};
+  my $biodb = $args{biodb};
+  my $refdb = $args{refdb};
+  my $evalue = $args{expect};
+  my $hitOrHsp = "hit";
+  if($args{hitorhsp}) { $hitOrHsp = $args{hitorhsp}; }
+  unless ($evalue) { $evalue = 1; }
+  my $outfmt = 0;
+
+  my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+  close($fh1);
+  if(ref($query)) {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
+    $seqout->write_seq($query);
+    close($fh);
+    my $xstr = qq($blastbindir/blastn -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -dust no);
+    qx($xstr);
+    unlink($fn);
+  }
+  elsif(-e $query and -r $query) {
+    my $xstr = qq($blastbindir/blastn -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -dust no);
+    qx($xstr);
+  }
+  else {
+    my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    $self->seqfileFromBlastDB(blastdb => $refdb, id => $query, ofh => $fh);
+    my $xstr = qq($blastbindir/blastn -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
+    $xstr .= qq( -dust no);
+    qx($xstr);
+    unlink($fn);
+  }
+# topHSPtopHit
+  my %forward;
+  if($hitOrHsp eq "hsp") {
+    %forward = topHSPtopHit($self, $fn1, "blast");
+  } else {
+    %forward = $self->tophit($fn1, "blast");
+  }
+  my @forwardhits = topHSPs($self, $fn1, "blast");
+  unlink($fn1);
+
+  my %reverse;
+  if(%forward) {
+  my $fhname = $forward{hname};
+  # carp("Blast.pm: $fhname");
+  my $revquery;
+  if($biodb) {
+    $revquery = $biodb->get_Seq_by_id($fhname);
+  }
+  else {
+    $revquery = $self->seqobjFromBlastDB(blastdb => $db, id => $fhname);
+  }
+  if($revquery) {
+    my($fh2, $fn2)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+    my $seqout2 = Bio::SeqIO->new(-fh => $fh2, -format => 'fasta');
+    $seqout2->write_seq($revquery);
+    close($fh2);
+  my($fh3, $fn3)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
+    my $qxstr = qq($blastbindir/blastn -outfmt $outfmt -query $fn2 -db $refdb -evalue $evalue -out $fn3);
+    $qxstr .= qq( -dust no);
+    qx($qxstr);
+  # my %reverse;
+  if($hitOrHsp eq "hsp") {
+    %reverse = topHSPtopHit($self, $fn3, "blast");
+  } else {
+    %reverse = $self->tophit($fn3, "blast");
+  }
+  # if($main::debug) {
+  #   copy($fn2, "second.query");
+  #   copy($fn3, "second.blast");
+  # }
+  unlink($fn2);
+  unlink($fn3);
+  }
+  }
+  else { return(); }
+
+  if(%forward and %reverse) {
+  return(\%forward, \%reverse, \@forwardhits);
+  }
+  elsif(%forward) {
+    return(\%forward, undef, \@forwardhits);
+  }
+  else {
+    return();
+  }
+}
+# }}}
+
+
 # {{{ mf_reciblastp (hash(query, refdb, db, biodb, expect)).
 # Returns two hashrefs or one hashref and undef.
 # query is a faa file with a single sequence or a protein seqobj.

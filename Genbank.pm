@@ -2265,7 +2265,22 @@ sub genbank2protfna {
     if(-z $filename) {
       carp("Zero size of $filename\n");
     }
-    my $seqio = Bio::SeqIO->new(-file => $filename);
+    my $ifh;
+    if($filename =~ m/\.gz$/) {
+      $ifh = tempfile();
+      if(gunzip $filename => $ifh) {
+        seek($ifh, 0, 0);
+      }
+      else { 
+        close($ifh);
+        linelistE("gunzip failed: $GunzipError"); 
+        next;
+      }
+    } 
+    else {
+      open($ifh, "<$filename") or croak("Could not open $filename");
+    }
+    my $seqio = Bio::SeqIO->new(-fh => $ifh, -format => "genbank");
     my ($gbkBn, $directory, $ext) = fileparse($filename, qr/\.[^.]*/);
     while(my $seqobj = $seqio->next_seq()) {
       my $seqid = $seqobj->display_name();
@@ -2307,7 +2322,6 @@ sub genbank2protfna {
             $gene=join(" ", $feature->get_tag_values("gene"));
           }
 
-
           my $fr = $feature->strand() == 1 ? 'F' : 'R';
           unless($id) { $id = $gbkBn . "_" . $cdsCnt; }
           my $featobj=$feature->spliced_seq(-nosort => '1');
@@ -2328,6 +2342,7 @@ sub genbank2protfna {
         }
       }
     }
+    close($ifh);
   }
   close($ofh);
 }
@@ -3295,19 +3310,26 @@ sub genbank_lt_prot {
   else {
     carp("$filename not readable or zero in size.");
   }
-  my $incomingIsTemp = 0;
-  if($filename =~ m/\.gz$/) {
-    my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
-    unless(gunzip $filename => $gbfh, AutoClose => 1) {
-      close($gbfh); unlink($gbfn);
-# next;
-      carp "gunzip failed: $filename $GunzipError\n";
+  my ($noex, $dir, $ext)= fileparse($filename, qr/\.[^.]*/);
+    my $bn = $noex . $ext;
+
+  my $ifh;
+  if($ext =~ m/\.gz$/) {
+    $ifh = tempfile();
+    if(gunzip $filename => $ifh) { 
+      seek($ifh,0,0);
     }
-    $filename = $gbfn;
-    $incomingIsTemp = 1;
+    else { 
+      close($ifh);
+      croak("gunzip failed: $GunzipError"); 
+    }
+  } 
+  else {
+    open($ifh, "<$filename") or croak("Could not open $filename");
   }
+
   my $retobj;
-  my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
+  my $seqio = Bio::SeqIO->new(-fh => $ifh, -format => "genbank");
   SEQ: while(my $seqobj = $seqio->next_seq()) {
     my $seqid = $seqobj->display_name();
     my $species = $seqobj->species();
@@ -3332,6 +3354,9 @@ sub genbank_lt_prot {
         if($feature->has_tag("gene")) {
           push(@lt, $feature->get_tag_values("gene"));
         }
+        if($feature->has_tag("protein_id")) {
+          push(@lt, $feature->get_tag_values("protein_id"));
+        }
         unless(@lt) {
           my $fr = $feature->strand() == 1 ? 'F' : 'R';
           my $fstart = $feature->start();
@@ -3346,9 +3371,6 @@ sub genbank_lt_prot {
         }
       }
     }
-  }
-  if($incomingIsTemp) {
-    unlink($filename);
   }
   return($retobj);
 }
