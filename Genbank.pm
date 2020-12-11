@@ -643,11 +643,28 @@ push(@do_feats, @{$args{features}});
 my $score=0;
 my $track = qw(features);
 
-my $seqio=Bio::SeqIO->new(-file => $gbkfile);
+# {{{ $ifh. We gunzip .gz files here if needed.
+  my $ifh;
+  if($gbkfile =~ m/\.gz$/) {
+    $ifh = tempfile();
+    if(gunzip $gbkfile => $ifh) {
+      seek($ifh,0,0);
+    }
+    else {
+      close($ifh);
+      linelistE("gunzip failed: $GunzipError");
+      next;
+    }
+  }
+  else {
+    open($ifh, "<$gbkfile") or croak("Could not open $gbkfile");
+  }
+# }}}
+
+my $seqio=Bio::SeqIO->new(-fh => $ifh);
 
 my $ofh;
 open($ofh, ">$args{outfilename}");
-
 
 print $ofh <<"TRACK";
 track\tname=$track\tdescription="Features"\tuseScore=0\tvisibility=1\titemRgb=on\tcolor=100,20,20
@@ -699,6 +716,7 @@ while(my $seqobj=$seqio->next_seq()) {
 #$emblout->write_seq($seqobj);
   $molCnt += 1;
 }
+close($ifh);
 close($ofh);
 }
 # }}}
