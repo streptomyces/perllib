@@ -1,12 +1,15 @@
 package Sco::Common;
 use 5.14.0;
 use Exporter qw(import);
+use File::Temp qw(tempfile tempdir);
 our @EXPORT_OK = qw(
 tablist linelist tablistE linelistE tabhash tabhashE tabvals
 tablistV tablistVE linelistV linelistVE tablistH linelistH
 tablistER tablistVER linelistER linelistVER tabhashER tabhashVER
 ymd ddmyhms csvsplit file2hash linelistserial csvlist inlist
+gzfh
 );
+use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 # use Sco::Common qw(tablist linelist tablistE linelistE tabhash tabhashE tabvals
 #                    tablistV tablistVE linelistV linelistVE);
 
@@ -282,6 +285,24 @@ sub inlist {
   return(0);
 }
 # }}}
+
+# {{{ sub gzfh
+sub gzfh {
+  my $self = shift(@_);
+  my $ifn = shift(@_);
+  my $ifh = tempfile();
+  if(gunzip $ifn => $ifh) {
+    seek($ifh,0,0);
+  }
+  else {
+    close($ifh);
+    linelistE("gunzip failed: $GunzipError");
+    return();
+  }
+  return($ifh);
+}
+# }}}
+
 
 return(1);
 
