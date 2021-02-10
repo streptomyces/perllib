@@ -769,7 +769,8 @@ if($temp) { $format = $temp; }
 }
 # }}}
 
-# {{{ hitHashes (blastOutputFileName format(optional)) returns(list of hash(qname, hname, qlen, hlen, signif, bit hdesc, qcover, hcover, hstrand) );
+# {{{ hitHashes (blastOutputFileName format(optional))
+# returns list of hashes.
 sub hitHashes {
 my $self = shift(@_);
 my $filename=shift(@_);
