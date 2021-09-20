@@ -538,7 +538,7 @@ sub hspHashes {
         }
         push(@retlist, {%rethash});
       }
-      push(@retlist, '//');
+      push(@retlist, '//'); # separates hits.
     }
     push(@retlist, '////'); # separates results if more than one in the input file.
   }
@@ -1017,6 +1017,7 @@ my $filename=shift(@_);
     $hdesc=~s/$cA/ /g;
     my %rethash = (qname => $qname, hname => $hname, qlen => $qlen, hlen => $hlen,
                    signif => $signif, bit => $bitScore, hdesc => $hdesc,
+                   qcov => $qcover, hcov => $hcover, fracid => $frac_id,
                    qcover => $qcover, hcover => $hcover, hstrand => $strand,
                    frac_id => $frac_id, qstart => $qstart, qend => $qend, hstart => $hstart,
                    hend => $hend, lah => $lah, laq => $laq);
@@ -1230,7 +1231,6 @@ sub reciblastp {
 }
 # }}}
 
-
 # {{{ reciblastn (hash(query, refdb, db, biodb, expect, hitorhsp)).
 # Returns two hashrefs or one hashref and undef.
 # query is a fna file with a single sequence or a nucleotide seqobj.
@@ -1334,7 +1334,6 @@ sub reciblastn {
   }
 }
 # }}}
-
 
 # {{{ mf_reciblastp (hash(query, refdb, db, biodb, expect)).
 # Returns two hashrefs or one hashref and undef.
