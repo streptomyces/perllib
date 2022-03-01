@@ -25,7 +25,8 @@ my $gbkSqlite = qq(/home/sco/seq/nt/genbank_ftp/genbank.qlt);
 my $draftsSqlite = qq(/home/sco/seq/nt/draft_ftp/drafts.sqlite);
 my $gbkDir = qq(/mnt/isilon/ncbigenomes/refrepgbk);
 my $draftDir = qq(/home/sco/seq/nt/draft_ftp);
-my $blastbindir = qq(/usr/local/bin);
+my $blastbindir = qq(/usr/bin);
+my $mkblbin = File::Spec->catfile($blastbindir, "makeblastdb");
 
 my $handle=DBI->connect("DBI:SQLite:dbname=$gbkSqlite", '', '');
 my $draftsHandle=DBI->connect("DBI:SQLite:dbname=$draftsSqlite", '', '');
@@ -1946,7 +1947,7 @@ $seqobj->display_name($dispname);
 $seqout->write_seq($seqobj);
 }
 close($fh);
-qx(/usr/local/bin/makeblastdb -in $fn -title "$args{title}" -dbtype nucl -out $args{name});
+qx($mkblbin -in $fn -title "$args{title}" -dbtype nucl -out $args{name});
 #print(STDERR "$fn\n");
 unlink($fn);
 return(name => $args{name}, files => [@gbkNames]);
@@ -1981,7 +1982,7 @@ $seqobj->display_name($dispname);
 $seqout->write_seq($seqobj);
 }
 close($fh);
-qx(/usr/local/bin/makeblastdb -in $fn -title "$args{organism}" -dbtype nucl -out $args{name});
+qx($mkblbin -in $fn -title "$args{organism}" -dbtype nucl -out $args{name});
 #print(STDERR "$fn\n");
 unlink($fn);
 return(name => $args{name}, files => [@gbkNames]);
@@ -2068,8 +2069,8 @@ FT: {
 
 close($fh);
 if($cdsCnt) {
-qx(/usr/local/bin/makeblastdb -in $fn -title "$args{title}" -dbtype prot -out $args{name});
-print(STDERR qq(/usr/local/bin/makeblastdb -in $fn -title "$args{title}" -dbtype prot -out $args{name}), "\n");
+qx($mkblbin -in $fn -title "$args{title}" -dbtype prot -out $args{name});
+print(STDERR qq($mkblbin -in $fn -title "$args{title}" -dbtype prot -out $args{name}), "\n");
 }
 #print(STDERR "$fn\n");
 #unlink($fn);
@@ -2512,7 +2513,7 @@ my $cdsCnt = 0;
 #$emblout->write_seq($seqobj);
 }
 close($fh);
-qx(/usr/local/bin/makeblastdb -in $fn -title "$args{organism}" -dbtype prot -out $args{name});
+qx($mkblbin -in $fn -title "$args{organism}" -dbtype prot -out $args{name});
 #print(STDERR "$fn\n");
 if($args{keepfasta}) {
 return(name => $args{name}, files => [@gbkNames], fasta => $fn);
