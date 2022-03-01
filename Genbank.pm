@@ -14,7 +14,7 @@ use File::Temp qw(tempfile tempdir);
 my $tempdir = qw(/mnt/volatile);
 my $template="genbankpmXXXXX";
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
-use Digest::SHA1  qw(sha1 sha1_hex sha1_base64);
+use Digest::SHA  qw(sha1 sha1_hex sha1_base64);
 use File::Copy;
 use Sco::Common;
 use List::Util qw(any all);

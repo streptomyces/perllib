@@ -12,7 +12,10 @@ use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 # $XML::SAX::ParserPackage = 'XML::SAX::PurePerl';
 
 our($AUTOLOAD);
-my $blastbindir = qq(/usr/local/bin);
+my $blastbindir = qq(/usr/bin);
+my $mkblbin = File::Spec->catfile($blastbindir, "makeblastdb");
+my $blcmdbin = File::Spec->catfile($blastbindir, "blastdbcmd");
+my $rpsblbin = File::Spec->catfile($blastbindir, "rpsblast");
 
 sub new {
         my($class, $self);
@@ -28,7 +31,7 @@ sub new {
 sub seqfileFromBlastDB {
   my $self = shift(@_);
   my %args = @_;
-  my $xstr = qq(/usr/local/bin/blastdbcmd -db $args{blastdb} -entry $args{id} -outfmt "%s");
+  my $xstr = qq($blcmdbin -db $args{blastdb} -entry $args{id} -outfmt "%s");
   my $qseq = qx($xstr);
   my $qobj = Bio::Seq->new(-seq => $qseq);
   $qobj->display_id($args{id});
@@ -43,7 +46,7 @@ sub seqfileFromBlastDB {
 sub seqobjFromBlastDB {
   my $self = shift(@_);
   my %args = @_;
-  my $xstr = qq(/usr/local/bin/blastdbcmd -db $args{blastdb} -entry $args{id});
+  my $xstr = qq($blcmdbin -db $args{blastdb} -entry $args{id});
   my $qfaa = qx($xstr);
   my @temp = split(/\n/, $qfaa);
   my $qseq = join("", @temp[1..$#temp]);
@@ -201,7 +204,7 @@ sub mkblastpdb {
   }
 
   if($protCnt) {
-    my $xstr = qq(/usr/local/bin/makeblastdb -in $fn -dbtype prot);
+    my $xstr = qq($mkblbin -in $fn -dbtype prot);
     $xstr .= qq( -title "$args{title}" -out $args{outfile} -parse_seqids);
     my $mbdbout = qx($xstr);
     if($faaWanted) {
@@ -1059,7 +1062,7 @@ sub rpsblast {
   if(exists($args{file})) {
   my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
   close($fh1);
-  `/usr/local/bin/rpsblast -query $args{file} -db $rpsblastdb -evalue $expect -out $fn1`;
+  `$rpsblbin -query $args{file} -db $rpsblastdb -evalue $expect -out $fn1`;
   return($fn1);
   }
 
@@ -1070,7 +1073,7 @@ sub rpsblast {
   close($fh);
   my($fh1, $fn1)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
   close($fh1);
-  `/usr/local/bin/rpsblast -query $fn -db $rpsblastdb -evalue $expect -out $fn1`;
+  `$rpsblbin -query $fn -db $rpsblastdb -evalue $expect -out $fn1`;
   unlink($fn);
   return($fn1);
   }
