@@ -384,6 +384,9 @@ for my $feature ($seqobj->all_SeqFeatures()) {
     my @tags = $feature->get_all_tags();
     my %ids;
     my @product;
+    if($feature->has_tag("pseudo")) {
+      push(@product, "Pseudogene");
+    }
     foreach my $tag (@tags) {
       if($tag eq $tagasid) {
         my @temp = $feature->get_tag_values($tag);
@@ -1483,7 +1486,7 @@ return(locus_tag => $locus_tag, product => $product, gene => $gene);
 }
 # }}}
 
-# {{{ sub locusTags2aaObjs %(file, locus_tags \@) returns a single Bio::Seq object
+# {{{ sub locusTags2aaObjs %(file, locus_tags \@) returns a list of Bio::Seq objects
 sub locusTags2aaObjs {
   my $self = shift(@_);
   my %args = @_;
@@ -1729,7 +1732,7 @@ return(name => $args{name}, entryCount => \%entryCount, files => [@gbkNames]);
 }
 # }}}
 
-# {{{ sub genbank2blastpDB %([files], name, title, faafn, locinfo)
+# {{{ sub genbank2blastpDB %([files], name, title, faafn, locinfo, dedup)
 # returns %(name, [files], faafn, numContigs);
 # If you supply a faafn then it is your responsibility to unlink it.
 sub genbank2blastpDB {
@@ -1800,18 +1803,18 @@ foreach my $temp (@gbkNames)  {
         my @temp = $feature->get_tag_values("locus_tag");
         $id = $temp[0];
       }
-      if($feature->has_tag("protein_id")) {
-        my @temp = $feature->get_tag_values("protein_id");
-        my $protein_id = $temp[0];
-        unless($id) {
-          $id = $protein_id;
-        }
-      }
       if($feature->has_tag("gene")) {
         my @temp = $feature->get_tag_values("gene");
         $gene = $temp[0];
         unless($id) {
           $id = $gene;
+        }
+      }
+      if($feature->has_tag("protein_id")) {
+        my @temp = $feature->get_tag_values("protein_id");
+        my $protein_id = $temp[0];
+        unless($id) {
+          $id = $protein_id;
         }
       }
       if($feature->has_tag("product")) {
@@ -1843,8 +1846,10 @@ foreach my $temp (@gbkNames)  {
 # }}}
 
 close($fh); # handle to fasta file $fn.
+if($args{dedup}) {
 my $dedupfn = _dedup_fasta($fn) or return();
 move($dedupfn, $fn);
+}
 
 if($cdsCnt) {
   my $runbin = $blastbindir ."/makeblastdb";
@@ -1875,6 +1880,8 @@ sub _dedup_fasta {
   my $seqio = Bio::SeqIO->new(-file => $ifn);
   while(my $seqobj = $seqio->next_seq()) {
     my $id = $seqobj->display_id();
+    my $desc = $seqobj->description();
+    unless($desc) { $desc = "hypothetical protein"; }
     my $seq = $seqobj->seq();
     my $shahex = sha1_hex($seq);
     if(exists($prh{$shahex})) {
@@ -1883,7 +1890,7 @@ sub _dedup_fasta {
       }
     }
     else {
-      $prh{$shahex} = [$seq, $id];
+      $prh{$shahex} = [$seq, $desc, $id];
     }
   }
   my @probj;
@@ -1891,6 +1898,7 @@ sub _dedup_fasta {
   for my $shahex (keys %prh) {
     my @val = @{$prh{$shahex}};
     my $seq = shift(@val);
+    my $desc = shift(@val);
     my @ids;
     for my $id (@val) {
       if(exists($idone{$id})) {
@@ -1906,6 +1914,7 @@ sub _dedup_fasta {
     my $id = join("", @ids);
     my $probj = Bio::Seq->new(-seq => $seq);
     $probj->display_id($id);
+    $probj->description($desc);
     push(@probj, $probj);
   }
   my @sorted = sort {
