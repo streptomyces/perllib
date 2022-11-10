@@ -1,6 +1,6 @@
 =head1 Name
 
-Micro::Protein
+Sco::Protein
 
 =head1 Description
 
@@ -65,7 +65,7 @@ elsif(ref($prot) eq "") {
 else {
   my $type = ref($prot);
   die <<"STOPPING";
-Micro::Protein sub ex_coef
+Sco::Protein sub ex_coef
 Argument can either be a Bio::Seq object or a scalar.
 You have provided $type.
 STOPPING
