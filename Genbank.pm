@@ -2114,7 +2114,7 @@ sub tags {
 }
 # }}}
 
-# {{{ sub genbank2faa %([files], old_locus_tag, ofh, tfh, orgname, seqid, binomial, lig)
+# {{{ sub genbank2faa %([files], skip_pseudo, old_locus_tag, ofh, tfh, orgname, seqid, binomial, lig)
 # returns %(name, [files]);
 # orgname defaults to 1. Boolean Organism name in description.
 # binomial. string. Name to use if organism binomial is not found in the genbank file.
@@ -2184,6 +2184,9 @@ if($args{binomial}) { $binomial = $args{binomial}; }
   my @temp = $seqobj->all_SeqFeatures();
   foreach my $feature (sort _feat_sorter @temp) {
     if($feature->primary_tag() eq 'CDS') {
+      if($feature->has_tag("pseudo") and $args{skip_pseudo}) {
+        next;
+      }
       $cdsCnt += 1;
       my $product;
       my $id;

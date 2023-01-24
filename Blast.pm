@@ -13,7 +13,7 @@ use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 # $XML::SAX::ParserPackage = 'XML::SAX::PurePerl';
 
 our($AUTOLOAD);
-my $blastbindir = qq(/usr/bin);
+my $blastbindir = qq(/usr/local/bin);
 my $mkblbin = File::Spec->catfile($blastbindir, "makeblastdb");
 my $blcmdbin = File::Spec->catfile($blastbindir, "blastdbcmd");
 my $rpsblbin = File::Spec->catfile($blastbindir, "rpsblast");
