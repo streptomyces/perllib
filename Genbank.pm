@@ -2114,7 +2114,7 @@ sub tags {
 }
 # }}}
 
-# {{{ sub genbank2faa %([files], skip_pseudo, old_locus_tag, ofh, tfh, orgname, seqid, binomial, lig)
+# {{{ sub genbank2faa %([files], skip_pseudo, old_locus_tag, ofh, tfh, orgname, seqid, binomial, lig, tagasid)
 # returns %(name, [files]);
 # orgname defaults to 1. Boolean Organism name in description.
 # binomial. string. Name to use if organism binomial is not found in the genbank file.
