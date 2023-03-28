@@ -28,6 +28,21 @@ sub new {
 
 ### more subs go below ###
 
+# {{{ fastaFileFromBlastDB (blastdb => blastdb, id => seqid, ofh => ofh);
+sub fastaFileFromBlastDB {
+  my $self = shift(@_);
+  my %args = @_;
+  my $xstr = qq($blcmdbin -db $args{blastdb} -entry $args{id} -outfmt "%f");
+  $xstr .= qq( -line_length 60);
+  my $fasta = qx($xstr);
+  my $ofh = $args{ofh};
+  print($ofh ($fasta));
+  close($ofh);
+  return(1);
+}
+# }}}
+
+
 # {{{ seqfileFromBlastDB (blastdb => blastdb, id => seqid, ofh => ofh);
 sub seqfileFromBlastDB {
   my $self = shift(@_);
@@ -1171,7 +1186,7 @@ sub reciblastp {
   }
   else {
     my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
-    $self->seqfileFromBlastDB(blastdb => $refdb, id => $query, ofh => $fh);
+    $self->fastaFileFromBlastDB(blastdb => $refdb, id => $query, ofh => $fh);
     my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
     $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);

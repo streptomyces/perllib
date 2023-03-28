@@ -2114,7 +2114,8 @@ sub tags {
 }
 # }}}
 
-# {{{ sub genbank2faa %([files], skip_pseudo, old_locus_tag, ofh, tfh, orgname, seqid, binomial, lig, tagasid)
+# {{{ sub genbank2faa %([files], skip_pseudo, old_locus_tag, ofh, tfh,
+# orgname, seqid, binomial, lig, tagasid, wantProduct)
 # returns %(name, [files]);
 # orgname defaults to 1. Boolean Organism name in description.
 # binomial. string. Name to use if organism binomial is not found in the genbank file.
@@ -2125,6 +2126,11 @@ sub tags {
 sub genbank2faa {
 my $self = shift(@_);
 my %args = @_;
+
+my $wantProduct = 1;
+if(exists($args{wantProduct})) {
+$wantProduct = $args{wantProduct};
+}
 
 my $orgnInDesc = 0;
 if(exists($args{orgname})) {
@@ -2246,7 +2252,7 @@ if($args{binomial}) { $binomial = $args{binomial}; }
         if($args{lig}) {
           push(@desc, $lig);
         }
-        if($product) {
+        if($product and $wantProduct) {
           push(@desc, $product);
         }
         if($seqidInDesc) {
