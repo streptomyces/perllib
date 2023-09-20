@@ -2093,13 +2093,15 @@ else {
 # }}}
 
 # {{{ sub tags (genbankfilename);
-# returns %(name, [files]);
+# returns a hash of hashrefs.
 sub tags {
   my $self = shift(@_);
   my $filename = shift(@_);
   my $seqio = Bio::SeqIO->new(-file => $filename);
-  my %tags;
+  my %rethash;
   while(my $seqobj = $seqio->next_seq()) {
+    my $seqid = $seqobj->display_id();
+    my %tags;
     my @temp = $seqobj->all_SeqFeatures();
     foreach my $feat (@temp) {
       my $pritag = $feat->primary_tag();
@@ -2109,8 +2111,9 @@ sub tags {
         $tags{$pritag}->{$tag} += 1;
       }
     }
+    $rethash{$seqid} = \%tags;
   }
-  return(%tags);
+  return(%rethash);
 }
 # }}}
 
