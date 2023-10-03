@@ -105,6 +105,17 @@ return();
 }
 # }}}
 
+# {{{ sub breaklines (string) returns a hash
+sub breaklines {
+  my $self = shift(@_);
+  my $seq = shift(@_);
+  my @lines;
+  while(my $line = substr($seq, 0, 60, "")) {
+    push(@lines, $line);
+  }
+  return(@lines);
+}
+# }}}
 
 # {{{ sub markovBackground (hash(file)) returns a hash
 sub markovBackground {
