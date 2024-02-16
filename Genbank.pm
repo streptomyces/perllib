@@ -2370,6 +2370,161 @@ return(@retlist);
 }
 # }}}
 
+# {{{ sub genbank2faa_protid %([files], skip_pseudo, old_locus_tag, ofh, tfh,
+# orgname, seqid, binomial, tagasid, wantProduct)
+# returns %(name, [files]);
+# orgname defaults to 1. Boolean Organism name in description.
+# binomial. string. Name to use if organism binomial is not found in the genbank file.
+# seqid defaults to 1. Sequence id in description.
+# tfh is optional. If a filehandle is given then a table of CDS is written
+# to that filehandle and the filehandle closed.
+sub genbank2faa_protid {
+my $self = shift(@_);
+my %args = @_;
+
+my $wantProduct = 1;
+if(exists($args{wantProduct})) {
+$wantProduct = $args{wantProduct};
+}
+
+my $orgnInDesc = 0;
+if(exists($args{orgname})) {
+$orgnInDesc = $args{orgname};
+}
+my $seqidInDesc = 0;
+if(exists($args{seqid})) {
+$seqidInDesc = $args{seqid};
+}
+
+my $ofh = $args{ofh};
+my $seqout = Bio::SeqIO->new(-fh => $ofh, -format => 'fasta');
+
+my $tfh;
+my $tableWanted = 0;
+if(exists($args{tfh})) {
+$tableWanted = 1;
+$tfh = $args{tfh};
+}
+
+my @gbkNames = @{$args{files}};
+
+my $cdsCnt = 0;
+foreach my $temp (@gbkNames)  {
+  my $filename;
+  if(-e $temp or -l $temp) { $filename = $temp; }
+  else { $filename = $gbkDir . '/' . $temp; }
+  unless(-r $filename) {
+    carp("Could not read $filename\n");
+  }
+  if(-z $filename) {
+    carp("Zero size of $filename\n");
+  }
+    my $incomingIsTemp = 0;
+    if($filename =~ m/\.gz$/) {
+      my($gbfh, $gbfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.gbff');
+      unless(gunzip $filename => $gbfh, AutoClose => 1) {
+        close($gbfh); unlink($gbfn);
+# next;
+        die "gunzip failed: $filename $GunzipError\n";
+      }
+      $filename = $gbfn;
+      $incomingIsTemp = 1;
+    }
+my $seqio = Bio::SeqIO->new(-file => $filename, -format => "genbank");
+my ($gbkBn, $directory, $ext) = fileparse($filename, qr/\.[^.]*/);
+while(my $seqobj = $seqio->next_seq()) {
+  my $seqid = $seqobj->display_name();
+my $species = $seqobj->species();
+my $binomial;
+if($species) {
+$binomial = $species->binomial('FULL');
+}
+unless($binomial =~ m/\w+/) {
+if($args{binomial}) { $binomial = $args{binomial}; }
+}
+  my @temp = $seqobj->all_SeqFeatures();
+  foreach my $feature (sort _feat_sorter @temp) {
+    if($feature->primary_tag() eq 'CDS') {
+      if($feature->has_tag("pseudo") and $args{skip_pseudo}) {
+        next;
+      }
+      $cdsCnt += 1;
+      my $product;
+      my $id;
+      my $gene;
+      my $protid;
+      if(exists $args{tagasid}) {
+        if($feature->has_tag($args{tagasid})) {
+          my @temp = $feature->get_tag_values($args{tagasid});
+          $id = shift(@temp);
+        }
+      }
+      elsif($args{old_locus_tag}) {
+        if($feature->has_tag("old_locus_tag")) {
+          my $lt=join("|", $feature->get_tag_values("old_locus_tag"));
+          $id = $lt;
+        }
+        elsif($feature->has_tag("locus_tag")) {
+          my $lt=join("|", $feature->get_tag_values("locus_tag"));
+          $id = $lt;
+        }
+      }
+      elsif($feature->has_tag("locus_tag")) {
+        my $lt=join("|", $feature->get_tag_values("locus_tag"));
+        $id = $lt;
+      }
+      if($feature->has_tag("protein_id")) {
+        $protid=join("|", $feature->get_tag_values("protein_id"));
+      }
+
+# Get product and gene.
+      if($feature->has_tag("product")) {
+        $product=join(" ", $feature->get_tag_values("product"));
+      }
+      if($feature->has_tag("gene")) {
+        my @temp = $feature->get_tag_values("gene");
+        $gene = $temp[0];
+      }
+
+      unless($id) {
+        if($gene) { $id = $gene; }
+        else {
+          $id = $gbkBn . "_" . sprintf("%05d", $cdsCnt);
+        }
+      }
+      my $aaobj = _feat_translate($feature);
+      if($aaobj) {
+      $aaobj->display_name($id);
+      my @desc;
+      if($protid) {
+        push(@desc, "[protein_id=$protid]");
+      }
+      else {
+        say("$id has not protein_id");
+      }
+      if($gene) { push(@desc, "[gene=$gene]"); }
+      if($product) { push(@desc, "[protein=$product]"); }
+      $aaobj->description(join(" ", @desc));
+      $seqout->write_seq($aaobj);
+      if($tableWanted) {
+        print($tfh join("\t", $id, $aaobj->length(), $feature->start(),
+        $feature->end(), $feature->strand(), $product), "\n");
+      }
+      }
+      else { carp("Failed to translate $id from $filename\n"); }
+    }
+  }
+}
+  if($incomingIsTemp) {
+    unlink($filename);
+  }
+}
+close($ofh);
+if($tableWanted) {
+close($tfh);
+}
+}
+# }}}
 
 # {{{ sub genbankribosomalfna %(file, id) returns Bio::Seq;
 sub genbankribosomalfna {
