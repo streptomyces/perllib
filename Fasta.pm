@@ -286,6 +286,21 @@ sub identifiers {
 }
 # }}}
 
+# {{{ sub id_count (hash(file)) returns a hash (id => count);
+sub id_count {
+  my $self = shift(@_);
+  my %args = @_;
+  my %retlist;
+  my $seqio = Bio::SeqIO->new(-file => $args{file});
+  while(my $seqobj = $seqio->next_seq()) {
+    my $seqid = $seqobj->display_name();
+    $retlist{$seqid} += 1;
+  }
+  return(%retlist);
+}
+# }}}
+
+
 # {{{ sub idsAndDescs (hash(file)) returns a hash(identifiers, descriptions);
 sub idsAndDescs {
   my $self = shift(@_);
@@ -394,7 +409,6 @@ return(bldbname => $args{bldbname}, infile => $args{file}, fnafile => $fnafn);
 }
 # }}}
 
-
 # {{{ sub selectEntries. hash(infile, ofh, \@ids)
 sub selectEntries {
 my $self = shift(@_);
@@ -407,8 +421,6 @@ my $seqout = Bio::SeqIO->new(-fh => $ofh, -format => "fasta");
 
 # tie my %fas, 'Bio::DB::Fasta', $infile;
 my $biodb = Bio::DB::Fasta->new($infile);
-
-
 
 my $outcnt = 0;
 for my $id (@{$listref}) {
