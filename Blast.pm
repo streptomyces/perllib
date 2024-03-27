@@ -7,16 +7,20 @@ use Bio::Seq;
 use File::Spec;
 use File::Copy;
 use File::Temp qw(tempfile tempdir);
-my $tempdir = qw(/mnt/volatile);
+my $tempdir = "$ENV{HOME}/volatile";
 my $template="BlastXXXXX";
 use IO::Uncompress::Gunzip qw(gunzip $GunzipError) ;
 # $XML::SAX::ParserPackage = 'XML::SAX::PurePerl';
 
 our($AUTOLOAD);
-my $blastbindir = qq(/usr/local/bin);
+# my $blastbindir = qq(/usr/local/bin);
+my $blastbindir = "";
 my $mkblbin = File::Spec->catfile($blastbindir, "makeblastdb");
-my $blcmdbin = File::Spec->catfile($blastbindir, "blastdbcmd");
+# my $blcmdbin = File::Spec->catfile($blastbindir, "blastdbcmd");
 my $rpsblbin = File::Spec->catfile($blastbindir, "rpsblast");
+# my $blastpbin = File::Spec->catfile($blastbindir, "blastp");
+my $blastpbin = "blastp";
+my $blcmdbin = "blastdbcmd";
 
 sub new {
         my($class, $self);
@@ -1174,20 +1178,20 @@ sub reciblastp {
     my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
     $seqout->write_seq($query);
     close($fh);
-    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
+    my $xstr = qq($blastpbin -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
     $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);
     unlink($fn);
   }
   elsif(-e $query and -r $query) {
-    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1);
+    my $xstr = qq($blastpbin -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1);
     $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);
   }
   else {
     my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
     $self->fastaFileFromBlastDB(blastdb => $refdb, id => $query, ofh => $fh);
-    my $xstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
+    my $xstr = qq($blastpbin -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
     $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);
     unlink($fn);
@@ -1219,7 +1223,7 @@ sub reciblastp {
     $seqout2->write_seq($revquery);
     close($fh2);
   my($fh3, $fn3)=tempfile($template, DIR => $tempdir, SUFFIX => '.blast');
-    my $qxstr = qq($blastbindir/blastp -outfmt $outfmt -query $fn2 -db $refdb -evalue $evalue -out $fn3);
+    my $qxstr = qq($blastpbin -outfmt $outfmt -query $fn2 -db $refdb -evalue $evalue -out $fn3);
     $qxstr .= qq( -comp_based_stats $comp_based_stats -seg no);
     qx($qxstr);
   # my %reverse;
