@@ -1798,6 +1798,7 @@ foreach my $temp (@gbkNames)  {
       my $f_strand = $feature->strand();
       my $product;
       my $id;
+      my $protein_id;
       my $gene;
       if($feature->has_tag("locus_tag")) {
         my @temp = $feature->get_tag_values("locus_tag");
@@ -1812,7 +1813,7 @@ foreach my $temp (@gbkNames)  {
       }
       if($feature->has_tag("protein_id")) {
         my @temp = $feature->get_tag_values("protein_id");
-        my $protein_id = $temp[0];
+        $protein_id = $temp[0];
         unless($id) {
           $id = $protein_id;
         }
@@ -1832,7 +1833,14 @@ foreach my $temp (@gbkNames)  {
         if($args{locinfo}) {
           $desc = "$f_start $f_end $f_strand $contig_serial $product";
         }
-        else { $desc = $product; }
+        else {
+          if($protein_id) {
+            $desc = "$protein_id $product";
+          }
+          else {
+            $desc = "no_protein_id $product";
+          }
+        }
         $aaobj->description($desc);
         $seqout->write_seq($aaobj);
         $cdsCnt += 1;
