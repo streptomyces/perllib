@@ -2128,7 +2128,7 @@ sub tags {
 # {{{ sub genbank2faa %([files], skip_pseudo, old_locus_tag, ofh, tfh,
 # orgname, seqid, binomial, lig, tagasid, wantProduct)
 # returns %(name, [files]);
-# orgname defaults to 1. Boolean Organism name in description.
+# orgname defaults to 0. Boolean Organism name in description.
 # binomial. string. Name to use if organism binomial is not found in the genbank file.
 # seqid defaults to 1. Sequence id in description.
 # lig. boolean. defaults to 0. include location in genome in the description.
@@ -2150,6 +2150,10 @@ $orgnInDesc = $args{orgname};
 my $seqidInDesc = 0;
 if(exists($args{seqid})) {
 $seqidInDesc = $args{seqid};
+}
+my $protidInDesc = 0;
+if(exists($args{protid})) {
+$protidInDesc = $args{protid};
 }
 
 my $ofh = $args{ofh};
@@ -2208,6 +2212,7 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       my $product;
       my $id;
       my $gene;
+      my $protid = "no_protein_id";
       if(exists $args{tagasid}) {
         if($feature->has_tag($args{tagasid})) {
           my @temp = $feature->get_tag_values($args{tagasid});
@@ -2228,9 +2233,10 @@ if($args{binomial}) { $binomial = $args{binomial}; }
         my $lt=join("|", $feature->get_tag_values("locus_tag"));
         $id = $lt;
       }
-      elsif($feature->has_tag("protein_id")) {
-        my $protid=join("|", $feature->get_tag_values("protein_id"));
-        $id = $protid;
+      if($feature->has_tag("protein_id")) {
+        my @temp = $feature->get_tag_values("protein_id");
+        $protid = $temp[0];
+        # unless($id) { $id = $protid; }
       }
 
 # Get product and gene.
@@ -2250,6 +2256,7 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       my $fr = $feature->strand() == 1 ? 'F' : 'R';
       unless($id) {
         if($gene) { $id = $gene; }
+        elsif($protid) { $id = $protid; }
         else {
           $id = $gbkBn . "_" . sprintf("%05d", $cdsCnt);
         }
@@ -2260,6 +2267,9 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       if($gene) { $product .= " gene: $gene"; }
       if($binomial) {
         my @desc;
+        if($protidInDesc) {
+          push(@desc, $protid);
+        }
         if($args{lig}) {
           push(@desc, $lig);
         }
@@ -2276,6 +2286,9 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       }
       else {
         my @desc;
+        if($protidInDesc) {
+          push(@desc, $protid);
+        }
         if($args{lig}) {
           push(@desc, $lig);
         }
