@@ -1732,7 +1732,7 @@ return(name => $args{name}, entryCount => \%entryCount, files => [@gbkNames]);
 }
 # }}}
 
-# {{{ sub genbank2blastpDB %([files], name, title, faafn, locinfo, dedup)
+# {{{ sub genbank2blastpDB %([files], name, title, faafn, locinfo, expseudo, dedup)
 # returns %(name, [files], faafn, numContigs);
 # If you supply a faafn then it is your responsibility to unlink it.
 sub genbank2blastpDB {
@@ -1791,8 +1791,10 @@ foreach my $temp (@gbkNames)  {
   my $seqio = Bio::SeqIO->new(-fh => $ifh, -format => "genbank");
   while(my $seqobj = $seqio->next_seq()) {
   foreach my $feature ($seqobj->all_SeqFeatures()) {
-
     if($feature->primary_tag() eq 'CDS') {
+      if($feature->has_tag("pseudo")) {
+        if($args{expseudo}) { next; }
+      }
       my $f_start = $feature->start();
       my $f_end = $feature->end();
       my $f_strand = $feature->strand();
