@@ -342,12 +342,12 @@ sub blastp {
     my $seqout = Bio::SeqIO->new(-fh => $fh, -format => 'fasta');
     $seqout->write_seq($query);
     close($fh);
-    qx($blastbindir/blastp -num_descriptions $ndesc -num_threads $n_threads -num_alignments $naln -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1 -comp_based_stats $cbs -seg no);
+    qx($blastpbin -num_descriptions $ndesc -num_threads $n_threads -num_alignments $naln -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1 -comp_based_stats $cbs -seg no);
     unlink($fn);
   }
   elsif(-e $query and -r $query) {
     # print(STDERR "Doing file $query\n");
-    qx($blastbindir/blastp -num_descriptions $ndesc -num_alignments $naln  -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats $cbs -seg no);
+    qx($blastpbin -num_descriptions $ndesc -num_alignments $naln  -outfmt $outfmt -query $query -db $db -evalue $evalue -out $fn1 -comp_based_stats $cbs -seg no);
   }
   else {
     print(STDERR "Something wrong with the query file $query\n");
