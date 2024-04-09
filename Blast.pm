@@ -69,9 +69,12 @@ sub seqobjFromBlastDB {
   my $xstr = qq($blcmdbin -db $args{blastdb} -entry $args{id});
   my $qfaa = qx($xstr);
   my @temp = split(/\n/, $qfaa);
+  my $header = $temp[0];
+  my ($id, $desc) = split(/\s+/, $header, 2);
   my $qseq = join("", @temp[1..$#temp]);
   my $qobj = Bio::Seq->new(-seq => $qseq);
   $qobj->display_name($args{id});
+  $qobj->description($desc);
   # if($main::debug) {
   #   my $seqout = Bio::SeqIO->new(-file => ">>modebug", -format => 'fasta');
   #   $seqout->write_seq($qobj);
