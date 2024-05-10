@@ -17,10 +17,11 @@ our($AUTOLOAD);
 my $blastbindir = "";
 my $mkblbin = File::Spec->catfile($blastbindir, "makeblastdb");
 # my $blcmdbin = File::Spec->catfile($blastbindir, "blastdbcmd");
-my $rpsblbin = File::Spec->catfile($blastbindir, "rpsblast");
+# my $rpsblbin = File::Spec->catfile($blastbindir, "rpsblast");
 # my $blastpbin = File::Spec->catfile($blastbindir, "blastp");
 my $blastpbin = "blastp";
 my $blcmdbin = "blastdbcmd";
+my $rpsblbin = "rpsblast";
 
 sub new {
         my($class, $self);
