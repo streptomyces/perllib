@@ -2619,7 +2619,6 @@ return(@retlist);
 }
 # }}}
 
-
 # {{{ sub genbank2protfna %([files], old_locus_tag, ofh) returns %(name, [files]);
 # tfh is optional. If a filehandle is given then a table of CDS is written
 # to that filehandle and the filehandle closed.
