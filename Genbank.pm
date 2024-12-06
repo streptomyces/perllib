@@ -25,7 +25,7 @@ my $gbkSqlite = qq(/home/sco/seq/nt/genbank_ftp/genbank.qlt);
 my $draftsSqlite = qq(/home/sco/seq/nt/draft_ftp/drafts.sqlite);
 my $gbkDir = qq(/mnt/isilon/ncbigenomes/refrepgbk);
 my $draftDir = qq(/home/sco/seq/nt/draft_ftp);
-my $blastbindir = qq(/usr/bin);
+my $blastbindir = qq(/usr/local/bin);
 my $mkblbin = File::Spec->catfile($blastbindir, "makeblastdb");
 
 my $handle=DBI->connect("DBI:SQLite:dbname=$gbkSqlite", '', '');
@@ -2394,7 +2394,7 @@ return(@retlist);
 # }}}
 
 # {{{ sub genbank2faa_protid %([files], skip_pseudo, old_locus_tag, ofh, tfh,
-# orgname, seqid, binomial, tagasid, wantProduct)
+# orgname, seqid, binomial, tagasid, wantProduct, begin_with_met)
 # returns %(name, [files]);
 # orgname defaults to 1. Boolean Organism name in description.
 # binomial. string. Name to use if organism binomial is not found in the genbank file.
@@ -2528,6 +2528,10 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       if($gene) { push(@desc, "[gene=$gene]"); }
       if($product) { push(@desc, "[protein=$product]"); }
       $aaobj->description(join(" ", @desc));
+      if($args{begin_with_met}) {
+        my $bwm = begin_with_met($aaobj);
+        $aaobj = $bwm;
+      }
       $seqout->write_seq($aaobj);
       if($tableWanted) {
         print($tfh join("\t", $id, $aaobj->length(), $feature->start(),
@@ -2546,6 +2550,19 @@ close($ofh);
 if($tableWanted) {
 close($tfh);
 }
+}
+# }}}
+
+# {{{ sub begin_with_met
+sub begin_with_met {
+my $aaobj = shift(@_);
+my $seq = $aaobj->seq();
+$seq =~ s/^[VI]/M/;
+$seq =~ s/^[vi]/m/;
+my $retobj = Bio::Seq->new(-seq => $seq);
+$retobj->display_id($aaobj->display_id());
+$retobj->description($aaobj->description());
+return($retobj);
 }
 # }}}
 
