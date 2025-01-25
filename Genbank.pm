@@ -1511,7 +1511,7 @@ sub locusTags2aaObjs {
   my $seqio = Bio::SeqIO->new(-fh => $gbfh, -format => "genbank");
   while($seqobj = $seqio->next_seq()) {
     my @features = $seqobj->all_SeqFeatures();
-    foreach my $feat (@features) {
+    FEAT: for my $feat (@features) {
       unless ($feat->primary_tag() eq 'CDS') { next ; }
       my @idtags = ("locus_tag", "protein_id", "old_locus_tag", "gene");
       my $featid;
@@ -1528,6 +1528,7 @@ sub locusTags2aaObjs {
               $aaobj->display_name($lt);
               $aaobj->description($product);
               push(@retlist, $aaobj);
+              next FEAT;
             }
           }
         }
@@ -1829,6 +1830,7 @@ foreach my $temp (@gbkNames)  {
       # unless($id) { $id = $fr . "_CDS_at_" . $feature->start(); }
       if($id) {
         my $aaobj = _feat_translate($feature);
+        unless($aaobj) { next; }
         $aaobj->display_name($id);
         if($gene) { $product .= " gene: $gene"; }
         my $desc;

@@ -1171,6 +1171,11 @@ sub reciblastp {
   if($args{comp_based_stats}) {
     $comp_based_stats = $args{comp_based_stats};
   }
+  my $num_threads = 1;
+  if($args{num_threads}) {
+    $num_threads = $args{num_threads};
+  }
+ 
   my $outfmt = 0;
 
 # Note the use of -comp_based_stats to 2 in the blastp calls below.
@@ -1183,7 +1188,7 @@ sub reciblastp {
     $seqout->write_seq($query);
     close($fh);
     my $xstr = qq($blastpbin -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
-    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    $xstr .= qq( -num_threads $num_threads -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);
     unlink($fn);
   }
@@ -1196,7 +1201,7 @@ sub reciblastp {
     my($fh, $fn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
     $self->fastaFileFromBlastDB(blastdb => $refdb, id => $query, ofh => $fh);
     my $xstr = qq($blastpbin -outfmt $outfmt -query $fn -db $db -evalue $evalue -out $fn1);
-    $xstr .= qq( -comp_based_stats $comp_based_stats -seg no);
+    $xstr .= qq( -num_threads $num_threads -comp_based_stats $comp_based_stats -seg no);
     qx($xstr);
     unlink($fn);
   }
