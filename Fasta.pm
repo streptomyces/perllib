@@ -279,7 +279,7 @@ sub identifiers {
   my @retlist;
   my $seqio = Bio::SeqIO->new(-file => $args{file});
   while(my $seqobj = $seqio->next_seq()) {
-    my $seqid = $seqobj->display_name();
+    my $seqid = $seqobj->display_id();
     push(@retlist, $seqid);
   }
   return(@retlist);

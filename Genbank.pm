@@ -2130,7 +2130,7 @@ sub tags {
 # }}}
 
 # {{{ sub genbank2faa %([files], skip_pseudo, old_locus_tag, ofh, tfh,
-# orgname, seqid, binomial, lig, tagasid, wantProduct)
+# orgname, seqid, binomial, lig, tagasid, wantProduct, protid, inoex)
 # returns %(name, [files]);
 # orgname defaults to 0. Boolean Organism name in description.
 # binomial. string. Name to use if organism binomial is not found in the genbank file.
@@ -2145,6 +2145,11 @@ my %args = @_;
 my $wantProduct = 1;
 if(exists($args{wantProduct})) {
 $wantProduct = $args{wantProduct};
+}
+
+my $inoexInDesc = 0;
+if(exists($args{inoex})) {
+$inoexInDesc = $args{inoex};
 }
 
 my $orgnInDesc = 0;
@@ -2174,6 +2179,7 @@ my @gbkNames = @{$args{files}};
 
 my $cdsCnt = 0;
 foreach my $temp (@gbkNames)  {
+  my ($inoex, $dir, $ext) = fileparse($temp, qr/\.[^.]*/);
   my $filename;
   if(-e $temp or -l $temp) { $filename = $temp; }
   else { $filename = $gbkDir . '/' . $temp; }
@@ -2271,6 +2277,9 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       if($gene) { $product .= " gene: $gene"; }
       if($binomial) {
         my @desc;
+        if($inoexInDesc) {
+          push(@desc, $inoex);
+        }
         if($protidInDesc) {
           push(@desc, $protid);
         }
@@ -2290,6 +2299,9 @@ if($args{binomial}) { $binomial = $args{binomial}; }
       }
       else {
         my @desc;
+        if($inoexInDesc) {
+          push(@desc, $inoex);
+        }
         if($protidInDesc) {
           push(@desc, $protid);
         }
