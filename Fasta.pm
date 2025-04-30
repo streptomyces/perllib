@@ -44,6 +44,28 @@ sub AUTOLOAD {
 
 ### more subs here ###
 
+# {{{ sub move_start(infile => fn, start => 6117, outfile => ofn)
+sub move_start {
+  my $self = shift(@_);
+  my %arg = @_;
+  open(my $ifh, "<", $arg{infile});
+  open(my $ofh, ">", $arg{outfile});
+
+  my $seqio = Bio::SeqIO->new(-fh => $ifh, -format => 'fasta');
+  my $seqout = Bio::SeqIO->new(-fh => $ofh, -format => 'fasta');
+  my $seqobj = $seqio->next_seq();
+  my $seq = $seqobj->seq();
+  my $left = substr($seq, $arg{start});
+  my $right = substr($seq, 0, $arg{start});
+  my $newseq = $left . $right;
+  my $newobj = Bio::Seq->new(-seq => $newseq);
+  $newobj->display_id($seqobj->display_id());
+  $seqout->write_seq($newobj);
+  close($ifh);
+  close($ofh);
+}
+# }}}
+
 # {{{ regionTranslate (hash(file, start, end, strand)) returns(proteinSeq)
 # for file you can pass sco, sve sgr sav, ssc, scl and it will find the respective chromosomes.
 sub regionTranslate {
@@ -224,14 +246,6 @@ return($ntSeq);
 }
 # }}}
 
-# {{{ somesub (args) returns(retvals)
-sub somesub {
-my $self=shift(@_);
-my %args=@_;
-return('something'); # change this
-}
-# }}}
-
 # {{{ sub getId ( hash(file, id) ). Returns a single Bio::Seq object.
 sub getId {
   my $self = shift(@_);
@@ -299,7 +313,6 @@ sub id_count {
   return(%retlist);
 }
 # }}}
-
 
 # {{{ sub idsAndDescs (hash(file)) returns a hash(identifiers, descriptions);
 sub idsAndDescs {
