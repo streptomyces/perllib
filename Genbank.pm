@@ -28,8 +28,8 @@ my $draftDir = qq(/home/sco/seq/nt/draft_ftp);
 my $blastbindir = qq(/usr/local/bin);
 my $mkblbin = File::Spec->catfile($blastbindir, "makeblastdb");
 
-my $handle=DBI->connect("DBI:SQLite:dbname=$gbkSqlite", '', '');
-my $draftsHandle=DBI->connect("DBI:SQLite:dbname=$draftsSqlite", '', '');
+my $handle; # =DBI->connect("DBI:SQLite:dbname=$gbkSqlite", '', '');
+my $draftsHandle; # =DBI->connect("DBI:SQLite:dbname=$draftsSqlite", '', '');
 
 # {{{ new
 sub new {

@@ -338,7 +338,7 @@ return($dir . '/' . $file . '.fas');
 }
 # }}}
 
-# {{{ sub fasta2blastpDB %(file, bldbname, title, faafile)
+# {{{ sub fasta2blastpDB %(file, bldbname, dedup, title, faafile)
 # returns %(bldbname, infile, faafile);
 sub fasta2blastpDB {
 my $self = shift(@_);
@@ -347,6 +347,11 @@ my %args = @_;
 
   my $filename = $args{file};
   my $incomingIsTemp = 0;
+  if($args{dedup}) {
+    my $dedupfn = _dedup_fasta($filename);
+    $filename = $dedupfn;
+    $incomingIsTemp = 1;
+  }
 
   my($faafh, $faafn);
   if($filename =~ m/\.gz$/) {
@@ -357,7 +362,6 @@ my %args = @_;
     else {
       ($faafh, $faafn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
     }
-
     unless(gunzip $filename => $faafh, AutoClose => 1) {
       close($faafh); unlink($faafn);
       die "gunzip failed: $filename $GunzipError\n";
@@ -450,7 +454,7 @@ $seqout->write_seq($seqobj);
 }
 return($outcnt);
 }
-
+# }}}
 
 # {{{ sub id2seqobj ( hash(file, id) ). Returns a single Bio::Seq object.
 sub id2seqobj {
@@ -685,7 +689,6 @@ return($aaobj);
 
 # }}}
 
-
 # {{{ sub allProteinsMax %(ifh, ofh, minlen, maxlen) returns();
 # Nucleotide positions are zero based.
 sub allProteinsMax {
@@ -797,14 +800,72 @@ sub allProteinsMax {
 }
 # }}}
 
+# {{{ sub _dedup_fasta
+sub _dedup_fasta {
+  my $ifn = shift(@_);
+  my %prh;
+  my $seqio = Bio::SeqIO->new(-file => $ifn);
+  while(my $seqobj = $seqio->next_seq()) {
+    my $id = $seqobj->display_id();
+    my $desc = $seqobj->description();
+    unless($desc) { $desc = "hypothetical protein"; }
+    my $seq = $seqobj->seq();
+    my $shahex = sha1_hex($seq);
+    if(exists($prh{$shahex})) {
+      unless(grep {$_ eq $id} @{$prh{$shahex}}) {
+        push(@{$prh{$shahex}}, $id);
+      }
+    }
+    else {
+      $prh{$shahex} = [$seq, $desc, $id];
+    }
+  }
+  my @probj;
+  my %idone;
+  for my $shahex (keys %prh) {
+    my @val = @{$prh{$shahex}};
+    my $seq = shift(@val);
+    my $desc = shift(@val);
+    my @ids;
+    for my $id (@val) {
+      if(exists($idone{$id})) {
+        $idone{$id} += 1;
+        my $idv = $id . "_" . $idone{$id};
+        push(@ids, $idv);
+      }
+      else {
+        $idone{$id} = 0;
+        push(@ids, $id);
+      }
+    }
+    my $id = join("", @ids);
+    my $probj = Bio::Seq->new(-seq => $seq);
+    $probj->display_id($id);
+    $probj->description($desc);
+    push(@probj, $probj);
+  }
+  my @sorted = sort {
+    $a->display_id() cmp $b->display_id();
+  } @probj;
+  
+  my ($tfh, $tfn)=tempfile($template, DIR => $tempdir, SUFFIX => '.faa');
+  my $seqout = Bio::SeqIO->new(-fh => $tfh, -format => 'fasta');
+  for my $probj (@sorted) {
+    $seqout->write_seq($probj);
+  }
+  close($tfh);
+  return($tfn);
+}
+# }}} 
 
+# {{{ sub _dumphash
 sub _dumphash {
   my %inh = @_;
   for my $key (keys %inh) {
     print("$key\t$inh{$key}\n");
   }
 }
-
+# }}}
 
 
 return(1);
