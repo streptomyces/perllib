@@ -24,7 +24,7 @@ The Perl documentation
 
 =head1 Author
 
-Govind Chandra E<lt>govind.chandra@bbsrc.ac.ukE<gt>
+Govind Chandra E<lt>govind.chandra@jic.ac.ukE<gt>
 
 =cut
 
@@ -185,7 +185,7 @@ sub isoelectric {
 
 #    print("At pH $pH charge is $charge\n");
 
-    if(abs($charge) < 0.001){
+    if(abs($charge) < 0.0001){
 #      print("At pH $pH charge is $charge\n");
       return $pH;
     }
